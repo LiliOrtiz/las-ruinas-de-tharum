@@ -1,0 +1,2417 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#080b0b" />
+    <meta name="description" content="Santuario Ω: Las ruinas de Tharum, una aventura point & click educativa sobre probabilidad." />
+    <title>Santuario Ω: Las ruinas de Tharum</title>
+    <link rel="stylesheet" href="style.css">
+
+  </head>
+  <body>
+    <a class="skip-link" href="#sceneFrame">Saltar al escenario</a>
+    <div id="app" class="app" data-orientation="landscape">
+      <header class="hud" aria-label="Estado de la expedición">
+        <div class="brand" aria-label="Santuario Omega">
+          <span class="brand-mark" aria-hidden="true">Ω</span>
+          <span class="brand-copy"><strong>Santuario Ω</strong><small id="sceneName">Campamento</small></span>
+        </div>
+        <div class="hud-status" aria-live="polite">
+          <span class="status-chip"><span aria-hidden="true">◉</span><strong id="sealCount">0</strong><small>/7 sellos</small></span>
+          <span class="status-chip"><span aria-hidden="true">✦</span><strong id="hintCount">1</strong><small>pistas</small></span>
+        </div>
+        <nav class="hud-actions" aria-label="Herramientas">
+          <button id="revealButton" class="icon-button" type="button" aria-label="Revelar objetos interactivos" title="Revelar objetos">◎</button>
+          <button id="hintButton" class="icon-button" type="button" aria-label="Pedir una pista" title="Pista">?</button>
+          <button id="notebookButton" class="icon-button" type="button" aria-label="Abrir cuaderno de Arraiga" title="Cuaderno">▤</button>
+          <button id="soundButton" class="icon-button" type="button" aria-label="Activar o silenciar sonido" title="Sonido">♪</button>
+          <button id="menuButton" class="icon-button" type="button" aria-label="Abrir menú" title="Menú">☰</button>
+        </nav>
+      </header>
+      <main id="gameMain" class="game-main">
+        <section id="sceneFrame" class="scene-frame" aria-label="Escenario explorable" tabindex="-1">
+          <img id="sceneImage" class="scene-image" alt="" draggable="false" />
+          <div id="hotspots" class="hotspots" aria-label="Objetos interactivos del escenario"></div>
+          <div class="scene-caption" aria-hidden="true">
+            <span id="sceneKicker">EXPEDICIÓN ARRIAGA</span>
+            <strong id="sceneTitle">Campamento abandonado</strong>
+          </div>
+          <button id="backButton" class="back-button" type="button" hidden><span aria-hidden="true">←</span> Volver</button>
+          <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+        </section>
+      </main>
+      <section id="dialogue" class="dialogue" aria-live="polite" hidden>
+        <div class="speaker" id="dialogueSpeaker">Cuaderno</div>
+        <p id="dialogueText"></p>
+        <button id="dialogueClose" type="button">Continuar</button>
+      </section>
+    </div>
+    
+    <div id="modalRoot" class="modal-root" aria-live="polite"></div>
+    <noscript><div class="noscript">Este juego necesita JavaScript para ejecutar los mecanismos de azar.</div></noscript>
+    <script>
+      window.SANTUARIO_INLINE_ASSETS = {
+        
+        //IMAGEN DE INICIO
+        "jungle-intro.webp": "img/jungle-intro.webp",
+        "axiom-landscape.jpg": "img/axiom-landscape.jpg",
+        "axiom-landscape2.jpg": "img/axiom-landscape2.jpg",      
+        "camp-landscape.webp": "img/camp-landscape.webp",       
+        "central-landscape.jpg": "img/central-landscape.jpg",
+        "central-landscape_02.jpg": "img/central-landscape_02.jpg",   
+        "coin-landscape.jpg": "img/coin-landscape.jpg",       
+        "dice-sum-landscape.jpg": "img/dice-sum-landscape.jpg",       
+        "dice-landscape.webp": "img/dice-landscape.webp",     
+        "laplace-landscape.jpg": "img/laplace-landscape.jpg",
+        "laplace-landscape.webp": "img/laplace-landscape.webp", 
+        "liberado.jpg": "img/liberado.jpg", 
+        "salida_leon.jpg": "img/salida_leon.jpg",
+        "puerta01.jpg": "img/puerta01.jpg",
+        "puerta02.jpg": "img/puerta02.jpg",   
+        "puzzle_arbol.jpg": "img/puzzle_arbol.jpg",    
+        "tent-landscape.jpg": "img/tent-landscape.jpg",       
+        "tree-landscape.jpg": "img/tree-landscape.jpg",        
+        "subjective-landscape.jpg": "img/subjective-landscape.jpg",    
+        "vault-landscape.jpg": "img/vault-landscape.jpg",               
+
+        // Agrega aquí el resto de tus imágenes siguiendo la misma estructura:
+        // "nombre-imagen.webp": "img/nombre-imagen.webp", LINEA 466
+      };
+    </script>
+    <audio id="ambientAudio" src="sound/sonidoSelva.wav" preload="auto"></audio>
+    <audio id="ruinaAudio" src="sound/ruina.wav" loop preload="auto"></audio>
+    <audio id="nivel06Audio" src="sound/nivel06.wav" loop preload="auto"></audio>
+    <audio id="finalAudio" src="sound/final.wav" loop preload="auto"></audio>
+    
+<script>
+
+(() => {
+  "use strict";
+
+  const STORAGE_KEY = "santuarioOmega.mvp.v3";
+  const ASSET_BASE = "assets/backgrounds/";
+  const INLINE_ASSETS = window.SANTUARIO_INLINE_ASSETS || null;
+  const assetSrc = (name) => INLINE_ASSETS?.[name] || `${ASSET_BASE}${name}`;
+
+  const defaults = () => ({
+    version: 3,
+    started: false,
+    currentScene: "camp",
+    journalTaken: false,
+    tentNotesRead: false,
+    tentMapRead: false,
+    hints: 1,
+    hintStep: {},
+    seals: { laplace: false, diceSum: false, tree: false, dice: false, coin: false, subjective: false, axiom: false},
+    rewards: [],
+    flashcards: [],
+    notesUnlocked: 0,
+    openedChests: {},
+    laplace: { selected: [], numerator: 0, denominator: 0, attempts: 0 },
+    diceSum: { target: null, selected: [], attempts: 0, instructionsRead: false }, // <-- AGREGADO AQUÍ
+    tree: { selected: [], attempts: 0 },
+    dice: { rolls: [], selected: [], attempts: 0, rowUsed: false, columnUsed: false },
+    coin: { runs: {}, attempts: 0, instructionsRead: false }, // <-- ASEGÚRATE DE AGREGAR ESTO    
+    subjective: { stage: 0, initial: 50, afterPositive: 50, final: 50, attempts: 0 },    
+    axiom: { placements: {}, attempts: 0, step: 1 },
+    endingSeen: false,
+    settings: { sound: true, reducedMotion: false },
+
+    
+  });
+
+  const mergeState = (raw) => {
+    const base = defaults();
+    if (!raw || typeof raw !== "object") return base;
+    return {
+      ...base,
+      ...raw,
+      seals: { ...base.seals, ...(raw.seals || {}) },
+      hintStep: { ...base.hintStep, ...(raw.hintStep || {}) },
+      openedChests: { ...base.openedChests, ...(raw.openedChests || {}) },
+      laplace: { ...base.laplace, ...(raw.laplace || {}) },
+      diceSum: { ...base.diceSum, ...(raw.diceSum || {}) },
+      
+      tree: { ...base.tree, ...(raw.tree || {}) },
+      dice: { ...base.dice, ...(raw.dice || {}) },
+      coin: { ...base.coin, ...(raw.coin || {}), runs: { ...(raw.coin?.runs || {}) } },
+      subjective: { ...base.subjective, ...(raw.subjective || {}) },
+      axiom: { ...base.axiom, ...(raw.axiom || {}), placements: { ...(raw.axiom?.placements || {}) } },
+     
+      settings: { ...base.settings, ...(raw.settings || {}) },
+    };
+  };
+
+  let storageAvailable = true;
+  const loadState = () => {
+    try {
+      return mergeState(JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"));
+    } catch (_error) {
+      storageAvailable = false;
+      return defaults();
+    }
+  };
+
+  let state = loadState();
+  let lastFocus = null;
+  let toastTimer = null;
+  let revealTimer = null;
+  let audioContext = null;
+
+  const save = () => {
+    state.notesUnlocked = Math.max(state.notesUnlocked, sealCount());
+    if (!storageAvailable) return;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (_error) {
+      storageAvailable = false;
+    }
+  };
+
+  const el = (id) => document.getElementById(id);
+  const app = el("app");
+  const sceneImage = el("sceneImage");
+  const hotspotsEl = el("hotspots");
+  const modalRoot = el("modalRoot");
+  const dialogueEl = el("dialogue");
+  const forcePortrait = new URLSearchParams(window.location.search).get("portrait") === "1";
+  const isPortrait = () => forcePortrait || window.matchMedia("(orientation: portrait)").matches;
+  const sealCount = () => Object.values(state.seals).filter(Boolean).length;
+  const foundationalRouteSolved = () => state.seals.laplace && state.seals.diceSum && state.seals.tree;
+  const advancedCoreSolved = () => state.seals.dice && state.seals.coin && state.seals.subjective;
+
+  const notes = [
+    {
+      title: "Día 1 · El hallazgo",
+      body: "¡Por fin encontré las ruinas de Tharum! Mis colegas se niegan a venir. Dicen que un indicio no basta para financiar una expedición, pero no voy a dejar que otro llegue primero.",
+    },
+    {
+      title: "Día 2 · Antes del umbral",
+      body: "Durante siglos se creyó que Tharum podía prever el futuro. Si alguien encuentra estas páginas: observe, repita y no confunda una posibilidad con una certeza.",
+    },
+    {
+      title: "El altar azul",
+      body: "El primer mecanismo compara una condición con el total. La inscripción habla del cielo: hay que contar sin alterar los diez pedestales.",
+    },
+    {
+      title: "El muro de dados",
+      body: "Cada par ordenado es un resultado diferente. El número del panel no es la respuesta: es la suma que deben cumplir todos los pares elegidos.",
+    },
+    {
+      title: "El árbol de rutas",
+      body: "Canoa grande, canoa chica, liana o a pie. Una decisión puede abrir otra; las posibilidades finales se leen en las hojas, no en cada rama intermedia.",
+    },
+    {
+      title: "Más allá de las tres llaves",
+      body: "Tharum no construyó un oráculo. Sus cámaras distinguen lo posible, lo esperado, lo observado y aquello que solamente creemos.",
+    },
+  ];
+
+  const flashcards = {
+    laplace: {
+      title: "Regla de Laplace",
+      body: "Si todos los casos son equiprobables, P(A)=casos favorables/casos posibles. En el altar: 5 gemas azules entre 10 pedestales, por lo tanto P(A)=5/10=1/2.",
+    },
+    diceSum: {
+      title: "Espacio muestral de dos dados",
+      body: "Ω contiene 36 pares ordenados (a,b). Para una suma dada, hay que reunir todos y sólo los pares que cumplen a+b=objetivo.",
+    },
+    tree: {
+      title: "Diagrama de árbol",
+      body: "Las ramas organizan decisiones sucesivas. Las hojas representan resultados finales: canoa grande, canoa chica, liana y a pie forman cuatro posibilidades.",
+    },
+    dice: {
+      title: "Una huella compartida",
+      body: "Si dos grupos comparten un resultado, ese resultado existe una sola vez. Contarlo desde dos caminos no lo convierte en dos casos.",
+    },
+    coin: {
+      title: "La tanda pequeña puede engañar",
+      body: "Muchas repeticiones suelen mostrar una proporción más estable. Estable no significa exacta en cada experimento.",
+    },
+    subjective: {
+      title: "Creer también puede revisarse",
+      body: "Cuando faltan casos equiprobables, una estimación expresa confianza basada en evidencia. Nueva evidencia puede cambiarla.",
+    },
+    axiom: {
+      title: "Tres límites del santuario",
+      body: "Una probabilidad no es negativa; todo Ω pesa 1; y sólo los sucesos que no pueden ocurrir juntos se suman directamente.",
+    },
+    
+  };
+
+  const bonusCards = [
+    { title: "No es una promesa", body: "P(A)=0,63 no promete 63 éxitos en cada 100 intentos: describe una frecuencia esperada en una gran cantidad de ensayos." },
+    { title: "Simple o compuesto", body: "Un único resultado forma un suceso simple. Un conjunto de varios resultados posibles forma un suceso compuesto." },
+    { title: "Todo el mapa", body: "Ω reúne todos los resultados posibles del experimento. Un suceso A es una parte de ese mapa: A⊆Ω." },
+  ];
+
+  const hintSets = {
+    camp: [
+      "El cuaderno abierto está sobre el baúl, delante de la tienda.",
+      "Entrá en la tienda y revisá las notas clavadas junto al mapa.",
+      "La entrada sólo será prudente después de leer el cuaderno y las notas de la tienda.",
+    ],
+    tent: [
+      "El mapa grande señala una zona selvática de Indonesia.",
+      "Las notas de León están prendidas alrededor del mapa.",
+      "Leé las notas del panel; después podés volver al campamento y entrar en las ruinas.",
+    ],
+    central: [
+      "Las tres primeras puertas se activan en orden, de izquierda a derecha.",
+      "Completá primero Laplace, después la suma de dados y por último el árbol.",
+      "Cuando obtengas las tres llaves iniciales, las mismas puertas revelarán cámaras más profundas.",
+    ],
+    laplace: [
+      "La palabra CIELO señala el color que cumple la condición.",
+      "Contá las gemas azules y comparalas con los diez pedestales.",
+      "Seleccioná las cinco azules y ajustá el mecanismo en 5/10.",
+    ],
+    diceSum: [
+      "El número del panel es una suma, no una cara de dado.",
+      "Revisá los 36 pares ordenados y seleccioná todos los que suman el objetivo.",
+      "Si el objetivo fuera 6: (1,5), (2,4), (3,3), (4,2) y (5,1).",
+    ],
+    tree: [
+      "Cada hoja representa una forma completa de atravesar la selva.",
+      "Canoa se divide en grande y chica; liana y a pie ya son rutas finales.",
+      "Activá cuatro resultados: canoa grande, canoa chica, liana y a pie.",
+    ],
+    dice: [
+      "Probá varias tiradas y observa que cada resultado ocupa una casilla.",
+      "“Al menos un seis” incluye toda la fila del seis y toda la columna del seis.",
+      "Usá ambas guías. La casilla (6,6) se ilumina desde dos lados, pero sólo se cuenta una vez.",
+    ],
+    coin: [
+      "Compará una tanda pequeña con una grande.",
+      "No busques que el resultado grande sea exactamente mitad y mitad.",
+      "La idea correcta habla de aproximación y estabilidad, no de una igualdad garantizada.",
+    ],
+    subjective: [
+      "Marcá tu confianza inicial: no existe un número único obligatorio.",
+      "Una pista favorable debería aumentar tu confianza en la ruta oriental.",
+      "Después, una evidencia contraria debería hacerte revisar esa confianza hacia abajo.",
+    ],
+    axiom: [
+      "Experimentá con los pesos antes de ordenar las tablillas.",
+      "El mapa completo vale 1 y ninguna probabilidad puede ser negativa.",
+      "La suma directa sólo corresponde a rutas que no pueden ocurrir al mismo tiempo.",
+    ],
+   
+    vault: [
+      "Arraiga sigue junto al contrapeso.",
+      "El medallón completo encaja en el receptáculo del fondo.",
+      "Accioná la palanca central para liberar el mecanismo y abrir la salida.",
+    ],
+  };
+
+///ESCENARIOS DEL JUEGO
+
+  const scenes = {
+    camp: {
+      name: "Campamento",
+      title: "Campamento abandonado",      
+      alt: "Campamento abandonado de León Arraiga frente a las ruinas, con tienda, radio, cuaderno, lámpara, mochila y entrada.",
+      image: { landscape: "camp-landscape.webp"},
+      hotspots: [
+        { id: "tent", label: "Tienda", action: "enterTent", l: [9, 10, 20, 60], p: [0, 10, 54, 44] },
+        { id: "journal", label: "Cuaderno", action: "journal", l: [20, 61, 25, 30], p: [5, 67, 52, 23] },
+        { id: "radio", label: "Radio averiada", action: "radio", l: [4, 50, 15, 18], p: [0, 49, 25, 15] },
+        { id: "lantern", label: "Linterna", action: "lantern", l: [53, 51, 10, 22], p: [47, 50, 17, 17] },
+        { id: "backpack", label: "Mochila", action: "backpack", l: [70, 60, 20, 38], p: [64, 67, 34, 24] },
+        { id: "entrance", label: "Entrar a las ruinas", action: "enter", l: [55, 8, 20, 50], p: [36, 15, 49, 34] },
+      ],
+    },
+    tent: {
+      name: "Tienda de Arraiga",
+      title: "Interior de la tienda",    
+      alt: "Interior de una tienda de expedición con mapa de Indonesia, notas de investigación, radio, libros y una cama.",
+      image: { landscape: "tent-landscape.jpg"},
+      hotspots: [
+        { id: "tentMap", label: "Mapa de Indonesia", action: "tentMap", l: [27, 8, 30, 38], p: [23, 33, 34, 18] },
+        { id: "tentNotes", label: "Notas de León", action: "tentNotes", l: [55, 8, 18, 33], p: [56, 33, 20, 18] },
+        { id: "tentBooks", label: "Libros y manuscritos", action: "tentBooks", l: [10, 20, 13, 28], p: [4, 42, 22, 11] },
+        { id: "tentPC", label: "Netbook", action: "openTutorials", l: [50, 47, 15, 20], p: [40, 20, 15, 18] },
+
+      /*PRIMERO LA UBICACION Y LUEGO EL TAMAÑO [HORIZONTAL, VERTICAL]*/
+      ],
+    },
+    central: {
+      name: "Cámara central",
+      title: "Entrada a las ruinas",
+      kicker: "PRIMER SALA",
+      alt: "Sala principal de piedra con un gran mecanismo central, tres accesos laterales y un mapa en el suelo.",
+      image: { landscape: "central-landscape.jpg"},
+      hotspots: [
+      /*PUERTA PUZLLE 01*/{ id: "centralDoor1", label: "PUZLLE 01", action: "laplacePuzzle", l: [3, 21, 15, 53], p: [0, 38, 24, 28] },
+      /*PUERTA PUZLLE 02*/{ id: "centralDoor2", label: "PUZLLE 02", action: "diceSumPuzzle", l: [68, 38, 12, 34], p: [64, 44, 16, 20] },
+      /*PUERTA PUZLLE 03*/{ id: "centralDoor3", label: "PUZLLE 03", action: "centralDoor3", l: [81, 22, 16, 55], p: [80, 36, 20, 31] },
+      /*PUERTA DEL MEDIO*/{ id: "centralDoorNext", label: "Puerta central", action: "centralDoorNext", l: [30, 6, 33, 66], p: [21, 25, 58, 36] },
+        { id: "mapPedestal", label: "Mapa de avance", action: "map", l: [31, 69, 37, 26], p: [29, 60, 44, 15] },
+      ],
+    },
+    ///PUERTA ABIERTA DE PRIMER SALA
+    central_puertaA: {
+      name: "Cámara central",
+      title: "Entrada a las ruinas", 
+      kicker: "PRIMER SALA",     
+      image: { landscape: "puerta01.jpg" },
+      hotspots: [
+      /*PUERTA DEL MEDIO*/{ id: "centralDoorNext", label: "Puerta central", action: "centralDoorNext", l: [30, 10, 33, 60], p: [21, 25, 58, 36] },
+        { id: "mapPedestal", label: "Mapa de avance", action: "map", l: [31, 69, 37, 26], p: [29, 60, 44, 15] },
+      ],
+    },
+
+    central_2: {
+      name: "Cámara central 2",
+      title: "Segunda sala central",
+      kicker: "SEGUNDA SALA",
+      alt: "Sala principal de piedra con un gran mecanismo central, tres accesos laterales y un mapa en el suelo.",
+      image: { landscape: "central-landscape_02.jpg"},
+      hotspots: [
+      /*PUERTA PUZLLE 04*/{ id: "centralDoor1", label: "PUZLLE 04", action: "centralDoor1", l: [3, 21, 15, 53], p: [0, 38, 24, 28] },
+      /*PUERTA PUZLLE 05*/{ id: "centralDoor2", label: "PUZLLE 05", action: "centralDoor2", l: [68, 38, 12, 34], p: [64, 44, 16, 20] },
+      /*PUERTA PUZLLE 06*/{ id: "centralDoor3", label: "PUZLLE 06", action: "centralDoor3", l: [81, 22, 16, 55], p: [80, 36, 20, 31] },
+      /*PUERTA DEL MEDIO*/{ id: "omegaRelief", label: "Puerta central", action: "centralMechanism", l: [30, 6, 33, 66], p: [21, 25, 58, 36] },
+        { id: "mapPedestal", label: "Mapa de avance", action: "map", l: [31, 69, 37, 26], p: [29, 60, 44, 15] },
+      ],
+    },
+
+    central_2puerta: {
+      name: "Cámara central 2",
+      title: "Segunda sala central",
+      image: { landscape: "puerta02.jpg" },
+      hotspots: [
+      /*PUERTA DEL MEDIO*/{ id: "omegaRelief", label: "Puerta central", action: "centralMechanism", l: [30, 6, 33, 66], p: [21, 25, 58, 36] },
+        { id: "mapPedestal", label: "Mapa de avance", action: "map", l: [31, 69, 37, 26], p: [29, 60, 44, 15] },
+      ],
+    },  
+    
+    tree: {
+      name: "Puzzle 03",
+      title: "Puzzle 03 - DIAGRAMA DE ÁRBOL",      
+      alt: "Mural de piedra con un árbol de caminos: canoa grande o chica, liana y a pie.",
+      image: { landscape: "puzzle_arbol.jpg" },
+      hotspots: [
+        { id: "treeRelief", label: "Entrar", action: "treePuzzle", l: [60, 10, 36, 80], p: [7, 12, 86, 78] },
+      ],
+    },
+
+///ENTRANDO A LA 2DA SALA
+    dice: {
+      name: "Puzzle 04",
+      title: "Puzzle 04 - Las 36 Huellas",     
+      alt: "Sala con dos dados de piedra, un tablero de 36 casillas, un guardián felino, y un arco de salida.",
+      image: { landscape: "dice-landscape.webp" },
+      hotspots: [
+        { id: "diceAltar", label: "Entrar al puzzle", action: "dicePuzzle", l: [33, 22, 38, 58], p: [25, 34, 49, 43] },
+        { id: "diceExit", label: "Volver", action: "goCentral", l: [4, 20, 21, 55], p: [0, 35, 22, 30] },
+      ],
+    },
+    coin: {
+      name: "Puzzle 05",
+      title: "Puzzle 05 - Fuente de los Ecos",
+      alt: "Fuente dividida en dos canales con una moneda ceremonial, tres palancas, contadores, y arco de salida.",
+      image: { landscape: "coin-landscape.jpg" },
+      hotspots: [
+        { id: "coinPedestal", label: "Entrar al puzzle", action: "coinPuzzle", l: [37, 30, 27, 45], p: [39, 54, 22, 18] },
+        { id: "coinExit", label: "Volver a la rotonda", action: "goCentral", l: [3, 14, 17, 43], p: [0, 35, 18, 22] },
+      ],
+    },
+    subjective: {
+      name: "Puzzle 06",
+      title: "Puzzle 06 - Pasaje de los Indicios",      
+      alt: "Bifurcación de piedra con dos rutas, tres nichos con pistas, un medidor de confianza, un bolso y un cofre.",
+      image: { landscape: "subjective-landscape.jpg" },
+      hotspots: [
+        { id: "beliefDial", label: "Ingresar", action: "subjectivePuzzle", l: [60, 15, 30, 60], p: [31, 48, 42, 20] },
+        { id: "subjectiveExit", label: "Volver a la rotonda", action: "goCentral", l: [0, 18, 15, 40], p: [0, 34, 25, 26] },
+      ],
+    },
+
+  ///ENTRANDO A Los ultimos puzzles
+
+    axiom: {
+      name: "Balanza",
+      title: "Puzzle de la Balanza",      
+      alt: "Cámara con balanza monumental, disco segmentado, canales, tablillas, ranuras, cofre y portal.",
+      image: { landscape: "axiom-landscape.jpg" },
+      hotspots: [
+        { id: "balance", label: "Balanza y tablillas", action: "axiomPuzzle", l: [25, 10, 50, 62], p: [15, 31, 72, 48] },
+        ],
+    },
+    //ya abierto el camino
+    axiom_2: {
+      name: "Balanza",
+      title: "Cámara de la Balanza",      
+      image: { landscape: "axiom-landscape2.jpg" },
+      hotspots: [
+        { id: "balance", label: "Avanzar", action: "vault", l: [25, 10, 50, 62], p: [15, 31, 72, 48] },
+        ],
+    },
+
+    vault: {
+      name: "Horizonte",
+      title: "Cámara del Horizonte",     
+      alt: "Archivo final del santuario con Arraiga vivo, un contrapeso, receptáculo de ocho llaves, palanca y salida.",
+      image: { landscape: "vault-landscape.jpg" },
+      hotspots: [
+        { id: "arriaga", label: "León Arraiga", action: "arriaga", l: [65, 30, 20, 30], p: [62, 47, 29, 21] },
+        { id: "finalLever", label: "Palanca de liberación", action: "finalpuzzle", l: [40, 56, 18, 32], p: [42, 53, 29, 21] },
+        { id: "archive", label: "Archivo de Ω", action: "archive", l: [0, 14, 25, 50], p: [0, 35, 35, 24] },
+        { id: "finalNotebook", label: "Última nota", action: "finalNote", l: [5, 69, 24, 20], p: [2, 63, 29, 15] },
+      ],
+    },
+    //LIBERADO
+    vault2: {
+      name: "Horizonte",
+      title: "Cámara del Horizonte",
+      alt: "Archivo final del santuario con Arraiga vivo, un contrapeso, receptáculo de ocho llaves, palanca y salida.",
+      image: { landscape: "liberado.jpg" },
+      hotspots: [
+      ],
+    },
+    vault3: {
+      name: "Horizonte",
+      title: "Cámara del Horizonte",
+      alt: "Archivo final del santuario con Arraiga vivo, un contrapeso, receptáculo de ocho llaves, palanca y salida.",
+      image: { landscape: "salida_leon.jpg" },
+      hotspots: [
+        { id: "escape", label: "Salida", action: "escape", l: [84, 13, 16, 56], p: [85, 35, 15, 33] },
+      ],
+    },
+  };
+
+
+  const beep = (frequency = 390, duration = 0.05, gain = 0.025) => {
+    if (!state.settings.sound) return;
+    try {
+      audioContext ||= new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const volume = audioContext.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.value = frequency;
+      volume.gain.value = gain;
+      oscillator.connect(volume);
+      volume.connect(audioContext.destination);
+      oscillator.start();
+      volume.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + duration);
+      oscillator.stop(audioContext.currentTime + duration);
+    } catch (_error) {
+      state.settings.sound = false;
+    }
+  };
+  const fadeOutAudio = (audioElement, duration = 1500) => {
+  if (!audioElement || audioElement.paused) return;
+  
+  const stepTime = 50; // Cada cuánto tiempo bajamos el volumen (milisegundos)
+  const steps = duration / stepTime;
+  const volumeStep = audioElement.volume / steps;
+
+  const fadeInterval = setInterval(() => {
+    if (audioElement.volume > volumeStep) {
+      audioElement.volume -= volumeStep;
+    } else {
+      audioElement.volume = 0;
+      audioElement.pause();
+      audioElement.currentTime = 0;
+      audioElement.volume = 1; // Restauramos el volumen original para la próxima reproducción
+      clearInterval(fadeInterval);
+    }
+  }, stepTime);
+};
+  const showToast = (message, type = "") => {
+    const toast = el("toast");
+    clearTimeout(toastTimer);
+    toast.textContent = message;
+    toast.className = `toast show ${type}`;
+    toastTimer = setTimeout(() => { toast.className = "toast"; }, 3800);
+  };
+const showDialogue = (speaker, text, onCallback) => {
+    el("dialogueSpeaker").textContent = speaker;
+    el("dialogueText").innerHTML = text;
+    dialogueEl.hidden = false;
+    el("dialogueClose").focus();
+
+    // Removemos event listeners anteriores para evitar que se acumulen duplicados
+    const closeBtn = el("dialogueClose");
+    const newCloseBtn = closeBtn.cloneNode(true);
+    closeBtn.parentNode.replaceReplace ? closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn) : closeBtn.replaceWith(newCloseBtn);
+    
+
+    // Al hacer clic en el botón de "Continuar" del diálogo:
+    el("dialogueClose").addEventListener("click", () => {
+      dialogueEl.hidden = true; // Ocultamos el diálogo actual
+
+      // Si se pasó una función de continuación, la ejecutamos
+      if (onCallback) {
+        onCallback();
+      }
+    }, { once: true }); // Usamos { once: true } para que el evento se ejecute una sola vez y se limpie solo
+  };
+
+  const hideDialogue = () => { dialogueEl.hidden = true; };
+
+  const openModal = (content, className = "") => {
+    lastFocus = document.activeElement;
+    modalRoot.innerHTML = `<section class="modal ${className}" role="dialog" aria-modal="true">${content}</section>`;
+    document.body.dataset.modalOpen = "true";
+    const first = modalRoot.querySelector("button, [href], input, [tabindex]:not([tabindex='-1'])");
+    setTimeout(() => first?.focus(), 0);
+  };
+
+  const closeModal = () => {
+    modalRoot.innerHTML = "";
+    delete document.body.dataset.modalOpen;
+
+    // Si cerramos el modal y no estamos en la escena subjective, pausamos el audio del nivel 06
+    const nivel06Audio = document.getElementById("nivel06Audio");
+    if (nivel06Audio && state.currentScene !== "subjective") {
+      fadeOutAudio (nivel06Audio, 1000);
+      nivel06Audio.currentTime = 0;
+    }
+   
+    // Si cerramos el modal FINAL
+    const finalAudio = document.getElementById("finalAudio");
+    if (finalAudio && state.currentScene !== "vault" && state.currentScene !== "vault2" && state.currentScene !== "vault3") {
+      fadeOutAudio (finalAudio, 1000);
+      finalAudio.currentTime = 0;
+    }
+
+
+    if (lastFocus && typeof lastFocus.focus === "function") lastFocus.focus();
+  };
+  
+  ///MUESTRA CONTROLES DEL JUEGO AL INICIO :)
+  const openControlsModal = () => {
+    openModal(`
+      <div class="modal-header">
+        <div>          
+          <h2>Controles</h2>
+        </div>
+        <button type="button" id="closeControlsCustom" class="close-modal" aria-label="Cerrar">&times;</button>
+      </div>
+      
+      <div class="modal-body">
+        <p class="modal-intro" style="max-width: none; margin-bottom: 20px;">
+          Este juego está diseñado para jugarse solo con el click izquierdo del
+          <strong>ratón/ mouse</strong>: Utilizalo para 
+          interactuar con el escenario e inspeccionar objetos.
+        </p>  
+      </div>    
+    `, "narrow");
+
+    // Vinculamos el evento a "X" personalizada
+    el("closeControlsCustom")?.addEventListener("click", () => {
+      closeModal();      // Cierra la ventana modal actual
+      renderScene();     // Dibuja la escena del juego (que por defecto arrancará en el campamento)
+    });
+
+    if (!state.journalTaken && state.currentScene === "camp") {
+      showDialogue(
+        "Campamento abandonado", 
+        "<i>¿Qué es este lugar? Parecen unas ruinas... No debí alejarme del grupo.</i>", 
+        () => {
+            // Esta función se ejecuta justo cuando el jugador cierra el primer diálogo
+            showDialogue(
+                "Nota del cuaderno", 
+                "<i>'León Arraiga', eso dice la etiqueta del cuaderno abierto adelante. ¿Quién es?</i>"
+            );
+        }
+      );
+    }
+};
+
+  const modalHeader = (eyebrow, title, closeLabel = "Cerrar") => `
+    <header class="modal-header">
+      <div><p class="modal-eyebrow">${eyebrow}</p><h2>${title}</h2></div>
+      <button class="close-modal" type="button" data-close-modal aria-label="${closeLabel}">×</button>
+    </header>`;
+
+  const updateHud = () => {
+    el("sealCount").textContent = String(sealCount());
+    el("hintCount").textContent = String(state.hints);
+    el("sceneName").textContent = scenes[state.currentScene].name;
+    el("soundButton").textContent = state.settings.sound ? "♪" : "×";
+    el("soundButton").setAttribute("aria-pressed", String(state.settings.sound));
+  };
+
+  //PUERTAS BLOQUEADAS?
+  const centralDoorLabel = (spotId, sceneId) => {
+    // Lógica para la Primera Sala
+    if (sceneId === "central" || sceneId === "central_puertaA") {
+      if (spotId === "centralDoor1") return state.seals.laplace ? "Puzzle 01 resuelto" : "Puzzle 01 - Regla de Laplace";      
+
+      if (spotId === "centralDoor2") return state.seals.laplace ? (state.seals.diceSum ? "Puzzle 02 resuelto" : "Puzzle 02 - Espacio muestral") : "Bloqueado";
+      if (spotId === "centralDoor3") return state.seals.diceSum ? (state.seals.tree ? "Puzzle 03 resuelto" : "Puzzle 03 - Diagrama de árbol") : "Bloqueado";      
+      if (spotId === "centralDoorNext") return foundationalRouteSolved() ? "Puerta central" : "Bloqueado";
+    }
+
+    if (sceneId === "central_2") {
+      if (spotId === "centralDoor1") return state.seals.dice ? "Puzzle 04 resuelto" : "Puzzle 04 - 36 huellas";
+      if (spotId === "centralDoor2") return state.seals.dice ? (state.seals.coin ? "Puzzle 05 resuelto" : "Puzzle 05 - La fuente") : "Bloqueado";
+      if (spotId === "centralDoor3") return state.seals.coin ? (state.seals.subjective ? "Puzzle 06 resuelto" : "Puzzle 06 - El pasaje") : "Bloqueado";
+      if (spotId === "omegaRelief") return advancedCoreSolved() ? "Puerta central" : "Bloqueado";
+    }
+    return "Puerta";
+  };
+
+  const hotspotStateClass = (spot) => {
+
+    if (state.currentScene === "central_2") {
+      if (spot.id === "centralDoor2" && !state.seals.dice) return "locked";
+      if (spot.id === "centralDoor3" && !state.seals.coin) return "locked";
+    }
+    if (spot.id === "centralDoor2" && !state.seals.laplace) return "locked";
+    if (spot.id === "centralDoor3" && !state.seals.diceSum) return "locked";
+    
+    if (spot.id === "centralDoorNext" && !foundationalRouteSolved()) return "locked";
+    if (spot.id === "omegaRelief" && !advancedCoreSolved()) return "locked";
+    if (spot.id.includes("Chest")) {
+      const key = spot.id.replace("Chest", "").replace(/^./, (c) => c.toLowerCase());
+      if (!state.seals[key]) return "locked";
+      if (state.openedChests[key]) return "solved";
+    }
+    const solvedMap = {
+      laplaceAltar: state.seals.laplace,
+      diceSumWall: state.seals.diceSum,
+      treeRelief: state.seals.tree,
+      centralDoor1: state.currentScene === "central_2" ? state.seals.dice : state.seals.laplace,      
+      centralDoor2: state.currentScene === "central_2" ? state.seals.coin : state.seals.diceSum,
+      centralDoor3: state.currentScene === "central_2" ? state.seals.subjective : state.seals.tree,
+
+      
+      diceAltar: state.seals.dice,
+      coinPedestal: state.seals.coin,
+      coinLevers: state.seals.coin,
+      coinFountain: state.seals.coin,
+      beliefDial: state.seals.subjective,
+      clues: state.seals.subjective,
+      balance: state.seals.axiom,
+      
+    };
+    return solvedMap[spot.id] ? "solved" : "";
+  };
+
+  const renderHotspots = () => {
+    const scene = scenes[state.currentScene];
+    const portrait = isPortrait();
+    hotspotsEl.innerHTML = "";
+    scene.hotspots.forEach((spot) => {
+      const button = document.createElement("button");
+      const [x, y, w, h] = portrait ? spot.p : spot.l;     
+      const label = spot.id.startsWith("centralDoor") ? centralDoorLabel(spot.id, state.currentScene) : spot.label;
+
+      button.type = "button";
+      button.className = `hotspot ${hotspotStateClass(spot)}`.trim();
+      button.dataset.label = label;
+      button.setAttribute("aria-label", label);
+      button.style.left = `${x}%`;
+      button.style.top = `${y}%`;
+      button.style.width = `${w}%`;
+      button.style.height = `${h}%`;
+      button.addEventListener("click", () => handleAction(spot.action));
+      hotspotsEl.appendChild(button);
+    });
+  };
+
+  const renderScene = () => {
+    const scene = scenes[state.currentScene];
+    const portrait = isPortrait();
+    app.dataset.orientation = portrait ? "portrait" : "landscape";
+    const imageName = portrait ? scene.image.portrait : scene.image.landscape;
+    sceneImage.src = assetSrc(imageName);
+    sceneImage.alt = scene.alt;
+    el("sceneTitle").textContent = scene.title;
+    el("sceneKicker").textContent = scene.kicker;
+    el("backButton").hidden = state.currentScene === "camp" || 
+    state.currentScene === "central" || state.currentScene === "central_2" || state.currentScene === "central_2puerta" ||
+    state.currentScene === "central_puertaA" || state.currentScene === "axiom" ||
+    state.currentScene === "axiom_2" || state.currentScene === "vault"|| state.currentScene === "vault2"
+    || state.currentScene === "vault3";
+
+    
+    // --- SONIDO DEL JUEGO!!!!---
+    const ambientAudio = document.getElementById("ambientAudio");    
+    const ruinaAudio = document.getElementById("ruinaAudio");
+    const nivel06Audio = document.getElementById("nivel06Audio");
+    const finalAudio = document.getElementById("finalAudio");
+
+    // 1. Audio de la Selva (Campamento y Tienda)
+    if (ambientAudio) {
+      if ((state.currentScene === "camp" || state.currentScene === "tent") && state.settings.sound) {
+        ambientAudio.play().catch(() => {});
+      } else {
+        fadeOutAudio (ambientAudio, 1000);        
+      }
+    }
+
+    // 2. Audio de las Ruinas (Centrales)
+    if (ruinaAudio) {
+      const isRuinaScene = ["central", "central_puertaA", "central_2", "central_2puerta"].includes(state.currentScene);
+      if (isRuinaScene && state.settings.sound) {
+        ruinaAudio.play().catch(() => {});
+      } else {
+        fadeOutAudio (ruinaAudio, 1000);        
+      }
+    }
+    // 3. Audio del Nivel 06 (Escena Subjective)
+    if (nivel06Audio) {
+      if (state.currentScene === "subjective" && state.settings.sound) {
+        nivel06Audio.play().catch(() => {});
+      } else {
+        // Ojo: Lo pausamos aquí SOLO si no estamos dentro del modal del puzzle. 
+        if (!modalRoot.innerHTML.includes("belief-lab")) {
+          fadeOutAudio (nivel06Audio, 1000);          
+        }
+      }
+    }   
+    // 5. Final
+    if(finalAudio){
+      if((state.currentScene === "vault" || state.currentScene === "vault2"|| state.currentScene === "vault3") && state.settings.sound){
+        finalAudio.play().catch(() => {});
+      }else{
+        if (!modalRoot.innerHTML.includes("belief-lab")) {
+          fadeOutAudio (finalAudio, 1000); 
+        }
+      }
+    }
+
+    // ---------------------------------------------
+
+    renderHotspots();
+    updateHud();
+    save();
+  };
+
+
+  const goTo = (sceneId, announce = "") => {
+    hideDialogue();
+    closeModal();
+    state.currentScene = sceneId;
+    save();
+    renderScene();
+    beep(320, .06);
+    if (announce) showDialogue("Información", announce);
+  };
+
+  const openIntro = () => {
+    const hasProgress = state.started;
+    openModal(`
+      <div class="intro-modal">
+        <div class="modal-body">
+          
+          <h1 class="intro-title">Santuario Ω <span>Las ruinas de Tharum</span></h1>
+          <div class="intro-story-grid">
+            <img class="intro-image" src="${assetSrc("jungle-intro.webp")}" alt="Selva húmeda de Indonesia atravesada por un sendero entre árboles antiguos." />
+            <div>
+              <p class="modal-intro">Recorres la selva de Indonesia junto a tu grupo de investigación mientras fotografías y registras el paisaje. Al alejarte unos metros para observar mejor el lugar, das un paso en falso y caes por una ladera.</p>
+              <p class="modal-intro">Mientras buscas la forma de regresar, encuentras un misterioso campamento abandonado. Todo indica que alguien estuvo allí... y desapareció.</p>
+              <p class="modal-intro">¡Descubre qué pasó!</p>    
+            </div>
+          </div>
+          
+          <!-- BOTÓN "SOBRE EL JUEGO" EN VEZ DE LOS TAGS -->
+            <div class="intro-meta-button-container" style="margin: 15px 0; text-align: left;">
+              <button class="button" type="button" id="openAbout">Sobre el juego</button>
+            </div>
+          
+          <div class="modal-actions">
+            ${hasProgress ? '<button class="button" type="button" id="newExpedition">Nuevo Juego</button>' : ""}
+            <button class="button primary" type="button" id="startExpedition">${hasProgress ? "Continuar" : "Iniciar Juego"}</button>
+          </div>
+        </div>
+      </div>
+    `, "wide");
+
+    // Evento para iniciar el juego
+    el("startExpedition").addEventListener("click", () => {
+      state.started = true;
+      closeModal();
+      openControlsModal();      
+      
+    });
+    el("newExpedition")?.addEventListener("click", () => resetGame(true));
+    // EVENTO PARA ABRIR LA VENTANA "SOBRE EL JUEGO"
+    el("openAbout")?.addEventListener("click", () => {
+      openAboutModal();
+    });
+  };
+
+  const resetGame = (fromIntro = false) => {
+    state = defaults();
+    save();
+    renderScene();
+    if (fromIntro) {
+      closeModal();
+      openIntro();
+    } else {
+      closeModal();
+      showToast("La expedición comenzó de nuevo.", "good");
+    }
+  };
+
+///SOBRE EL JUEGO VENTANA
+const openAboutModal = () => {
+    openModal(`
+      <div class="modal-header">
+        <div>
+          <h2>Sobre el juego</h2>
+        </div>
+        <button type="button" id="closeAboutCustom" class="close-modal" aria-label="Cerrar">&times;</button>
+      </div>
+      
+      <div class="modal-body">               
+        <div class="intro-meta" style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px;">
+          <p class="modal-intro"><strong>Santuario Ω: Las ruinas de Tharum</strong> es un juego con estilo Point & click, con una duración 
+            aproximada de 30 minutos. Solo se utiliza el mouse. Hay un total de
+            7 puzzles a completar. La partida se guarda de forma automática, excepto que selecciones 
+            "NUEVO JUEGO" para comenzar de cero.</p> 
+        </div>
+      </div>    
+
+    `, "narrow");
+
+    // Vinculamos el evento exclusivamente a nuestra "X" personalizada
+    el("closeAboutCustom")?.addEventListener("click", () => {
+        openIntro(); // Vuelve a abrir la pantalla de introducción limpia
+    });
+};
+
+  const revealHotspots = () => {
+    clearTimeout(revealTimer);
+    hotspotsEl.classList.add("reveal");
+    beep(520, .05);
+    revealTimer = setTimeout(() => hotspotsEl.classList.remove("reveal"), 2800);
+  };
+
+  const useHint = () => {
+    const scene = state.currentScene;
+    const hints = hintSets[scene] || hintSets.central;
+    const step = state.hintStep[scene] || 0;
+    const chosen = hints[Math.min(step, hints.length - 1)];
+    state.hintStep[scene] = Math.min(step + 1, hints.length - 1);
+    if (state.hints > 0) state.hints -= 1;
+    save();
+    updateHud();
+    showDialogue(state.hints >= 0 ? "Pista de expedición" : "Pista", chosen);
+  };
+
+  const openMap = () => {
+    const rows = [
+      ["Puzzle 01 · Regla de Laplace", state.seals.laplace], ["Puzzle 02 · Suma de dados", state.seals.diceSum], ["Puzzle 03 · Diagrama de árbol", state.seals.tree],
+      ["Puzzle 04 - 36 Huellas", state.seals.dice], ["Puzzle 05 - Fuente de los Ecos", state.seals.coin], ["Puzzle 06 - Pasaje de los Indicios", state.seals.subjective],
+      ["Cámara de la Balanza", state.seals.axiom], 
+    ];
+    openModal(`${modalHeader("MAPA DE AVANCE", "Puzzles del santuario")}
+      <div class="modal-body">
+        <div class="seal-row">${rows.map(([, on], i) => `<span class="seal-dot ${on ? "on" : ""}" aria-label="Sello ${i + 1} ${on ? "conseguido" : "pendiente"}">${i + 1}</span>`).join("")}</div>
+        <div class="note-list">${rows.map(([name, on]) => `<article class="note-entry ${on ? "" : "locked"}"><h3>${on ? "✓" : "○"} ${name}</h3><p>${on ? "Completado" : "No completado."}</p></article>`).join("")}</div>
+      </div>`, "narrow");
+  };
+
+  const openMenu = () => {
+    openModal(`${modalHeader("EXPEDICIÓN", "Menú")}
+      <div class="modal-body menu-list">
+        <button class="button" type="button" id="menuContinue">Continuar jugando</button>
+        <button class="button" type="button" id="menuReveal">Revelar objetos interactivos</button>
+        <button class="button" type="button" id="menuSound">${state.settings.sound ? "Silenciar" : "Activar"} sonidos</button>
+        <button class="button danger" type="button" id="menuReset">Reiniciar progreso</button>
+        <p class="feedback">${storageAvailable ? "El progreso se guarda en este dispositivo." : "El navegador no permite guardar: el progreso se conservará sólo durante esta sesión."}</p>
+      </div>`, "narrow");
+    el("menuContinue").addEventListener("click", closeModal);
+    el("menuReveal").addEventListener("click", () => { closeModal(); revealHotspots(); });
+
+    el("menuSound").addEventListener("click", () => { 
+      state.settings.sound = !state.settings.sound; 
+      save(); 
+      closeModal(); 
+      updateHud(); 
+
+      const ambientAudio = document.getElementById("ambientAudio");
+      const ruinaAudio = document.getElementById("ruinaAudio");
+      const nivel06Audio = document.getElementById("nivel06Audio");
+      const finalAudio = document.getElementById("finalAudio");
+
+      if (state.settings.sound) {
+        if (ambientAudio && (state.currentScene === "camp" || state.currentScene === "tent")) {
+          ambientAudio.play().catch(() => {});
+        }
+        if (ruinaAudio && ["central", "central_puertaA", "central_2", "central_2puerta"].includes(state.currentScene)) {
+          ruinaAudio.play().catch(() => {});
+        }
+        if (nivel06Audio && (state.currentScene === "subjective" || modalRoot.innerHTML.includes("belief-lab"))) {
+          nivel06Audio.play().catch(() => {});
+        }        
+        if (finalAudio && ((state.currentScene === "vault" || state.currentScene === "vault2" ||state.currentScene === "vault3") || modalRoot.innerHTML.includes("belief-lab"))) {
+          finalAudio.play().catch(() => {});
+        }
+      } else {
+        if (ambientAudio) fadeOutAudio (ambientAudio, 1000); 
+        if (ruinaAudio) fadeOutAudio (ruinaAudio, 1000); 
+        if (nivel06Audio) fadeOutAudio (nivel06Audio, 1000); 
+        if (finalAudio) fadeOutAudio (finalAudio, 1000); 
+
+      }
+    });
+
+    el("menuReset").addEventListener("click", () => {
+      if (window.confirm("¿Reiniciar toda la expedición? Esta acción borra las llaves conseguidas y la información guardada.")) resetGame();
+    });
+  };
+
+  const openNotebook = (tab = "notes") => {
+    const unlocked = Math.min(notes.length, 1 + state.notesUnlocked);
+    const tabContent = {
+      notes: `<div class="note-list">${notes.map((note, i) => `<article class="note-entry ${i < unlocked ? "" : "locked"}"><h3>${i < unlocked ? note.title : "Página sellada"}</h3><p>${i < unlocked ? note.body : "Conseguí otro sello para revelar esta página."}</p></article>`).join("")}</div>`,
+      cards: `<div class="card-grid">${Object.entries(flashcards).map(([key, card]) => `<article class="flashcard ${state.flashcards.includes(key) ? "" : "locked"}"><h3>${state.flashcards.includes(key) ? card.title : "Flashcard sin descubrir"}</h3><p>${state.flashcards.includes(key) ? card.body : "Resolvé el mecanismo correspondiente."}</p></article>`).join("")}${bonusCards.map((card, i) => `<article class="flashcard ${state.flashcards.includes(`bonus-${i}`) ? "" : "locked"}"><h3>${state.flashcards.includes(`bonus-${i}`) ? card.title : "Hallazgo adicional"}</h3><p>${state.flashcards.includes(`bonus-${i}`) ? card.body : "Puede aparecer dentro de un cofre raro."}</p></article>`).join("")}</div>`,
+      record: `<div class="note-list">
+        <article class="note-entry"><h3>Espacio muestral</h3><p>En este santuario usamos Ω. Cada suceso A reúne algunos resultados: A⊆Ω.</p></article>
+        <article class="note-entry"><h3>Llaves</h3><p>${sealCount()} de 7. ${state.seals.laplace ? "Laplace: P(A)=5/10=1/2. " : ""}${state.seals.diceSum ? `Última suma del muro: ${state.diceSum.target}. ` : ""}${state.seals.tree ? "Árbol: 4 rutas finales. " : ""}${state.seals.dice ? "Al menos un seis: P(A)=11/36. " : ""}${state.coin.runs[1000] ? `Última tanda grande: ${Math.round(state.coin.runs[1000].ratio * 1000) / 10}% de caras. ` : ""}</p></article>
+        </div>`,
+    };
+    openModal(`${modalHeader("CUADERNO DE ARRIAGA", "Registro de la expedición")}
+      <div class="modal-body">
+        <div class="notebook-tabs" role="tablist">
+          <button class="button" role="tab" aria-selected="${tab === "notes"}" data-notebook-tab="notes">Notas</button>
+          <button class="button" role="tab" aria-selected="${tab === "cards"}" data-notebook-tab="cards">Flashcards</button>
+          <button class="button" role="tab" aria-selected="${tab === "record"}" data-notebook-tab="record">Registro matemático</button>
+        </div>
+        <div>${tabContent[tab]}</div>
+      </div>`, "wide");
+    modalRoot.querySelectorAll("[data-notebook-tab]").forEach((button) => button.addEventListener("click", () => openNotebook(button.dataset.notebookTab)));
+  };
+
+  const rewardNames = { dice: "las Huellas", coin: "los Ecos", subjective: "los Indicios", axiom: "la Balanza"};
+  const openReward = (key) => {
+    if (!state.seals[key]) {
+      showToast("El cofre sigue unido al mecanismo.", "bad");
+      return;
+    }
+    if (state.openedChests[key]) {
+      showToast("El cofre está vacío; su hallazgo ya figura en el cuaderno.");
+      return;
+    }
+
+    const roll = Math.random();
+    const rarity = roll < .65 ? "COMÚN" : roll < .93 ? "RARA" : "LEGENDARIA";
+    const gainedHints = rarity === "COMÚN" ? 1 : rarity === "RARA" ? 2 : 3;
+    const bonusCount = rarity === "COMÚN" ? 0 : rarity === "RARA" ? 1 : 2;
+    const lockedBonuses = bonusCards.map((_, i) => `bonus-${i}`).filter((id) => !state.flashcards.includes(id));
+    const gainedBonuses = [];
+    for (let i = 0; i < bonusCount && lockedBonuses.length; i += 1) {
+      const index = Math.floor(Math.random() * lockedBonuses.length);
+      const picked = lockedBonuses.splice(index, 1)[0];
+      state.flashcards.push(picked);
+      gainedBonuses.push(picked);
+    }
+    state.hints += gainedHints;
+    state.openedChests[key] = true;
+    state.rewards.push({ key, rarity, gainedHints, gainedBonuses, at: Date.now() });
+    save();
+    updateHud();
+    beep(rarity === "LEGENDARIA" ? 720 : rarity === "RARA" ? 590 : 470, .25, .045);
+
+    const rarityClass = rarity === "LEGENDARIA" ? "reward-legendary" : rarity === "RARA" ? "reward-rare" : "reward-common";
+    openModal(`${modalHeader(`COFRE DE ${rewardNames[key].toUpperCase()}`, `Recompensa ${rarity.toLowerCase()}`)}
+      <div class="modal-body ${rarityClass}">
+        <div class="reward-orb" aria-hidden="true">${rarity === "LEGENDARIA" ? "✺" : rarity === "RARA" ? "✦" : "◇"}</div>
+        <p class="modal-intro">El cofre contiene <strong>${gainedHints} ${gainedHints === 1 ? "ficha" : "fichas"} de pista</strong>${gainedBonuses.length ? ` y ${gainedBonuses.length} flashcard${gainedBonuses.length > 1 ? "s" : ""} adicional${gainedBonuses.length > 1 ? "es" : ""}` : ""}. La flashcard principal del mecanismo ya quedó guardada de manera garantizada.</p>
+        <div class="feedback good">Probabilidades del cofre: 65 % común · 28 % rara · 7 % legendaria. Ninguna recompensa es necesaria para avanzar.</div>
+        <div class="modal-actions"><button class="button primary" type="button" data-close-modal>Guardar y continuar</button></div>
+      </div>`, "narrow");
+  };
+
+  const solveSeal = (key, message ) => {
+    if (state.seals[key]) return;
+    state.seals[key] = true;
+    if (!state.flashcards.includes(key)) state.flashcards.push(key);
+    state.notesUnlocked = Math.max(state.notesUnlocked, sealCount());
+    save();
+    closeModal();
+    // Si ya se completaron los 3 puzzles, vamos a la central 2; si no, a la central normal
+      if (advancedCoreSolved()) {
+      goTo("central_2puerta", message);
+      } else {
+      goTo("central_2", message);
+      }
+  };
+
+  const solveFoundationalSeal = (key, message) => {
+    if (state.seals[key]) return;
+    state.seals[key] = true;
+    if (!state.flashcards.includes(key)) state.flashcards.push(key);
+    state.notesUnlocked = Math.max(state.notesUnlocked, sealCount());
+    save();
+    closeModal();
+    // Si ya se completaron los 3 puzzles, vamos a la central 2; si no, a la central normal
+      if (foundationalRouteSolved()) {
+      goTo("central_puertaA", message);
+      } else {
+      goTo("central", message);
+      }
+  };
+
+  /* ---------- Puzzle 01: Regla de Laplace ---------- */
+ 
+  const openLaplacePuzzle = (message = "", messageType = "") => {
+    const solved = state.seals.laplace;
+    const dial = (name, label, value) => `<div class="fraction-dial"><span>${label}</span><div><button type="button" data-dial="${name}" data-delta="-1" aria-label="Restar uno a ${label}" ${solved ? "disabled" : ""}>−</button><strong>${name === "denominator" && value === 0 ? "-" : value}</strong><button type="button" data-dial="${name}" data-delta="1" aria-label="Sumar uno a ${label}" ${solved ? "disabled" : ""}>+</button></div></div>`;
+    openModal(`${modalHeader("", "PUZZLE 01 · REGLA DE LAPLACE")}
+      <div class="modal-body">
+        <div class="laplace-layout">
+          <div class="puzzle-photo laplace-photo">
+            <img src="${assetSrc("laplace-landscape.jpg")}" alt="Diez pedestales con cinco gemas azules y cinco rojas." />
+          </div>
+          <section class="laplace-console">
+            <p class="modal-intro">Hay 10 gemas. La inscripción da una pista del color de las gemas que debería contar y cuáles no. La proporción correcta debe ser: Gema del Cielo/TOTAL.</p>
+            <div class="fraction-controls">
+              ${dial("numerator", "Gema", state.laplace.numerator)}
+              <span class="fraction-bar" aria-hidden="true">/</span>
+              ${dial("denominator", "Total", state.laplace.denominator)}
+            </div>
+            <div class="modal-actions2">
+              ${solved ? '<button class="button primary" type="button" data-close-modal>Volver</button>' : '<button class="button" type="button" id="openLaplaceHelp">Abordar tema</button><button class="button" type="button" id="clearLaplace">Reiniciar</button><button class="button primary" type="button" id="checkLaplace">Activar</button>'}
+            </div>
+            <div id="laplaceFeedback" class="feedback ${messageType}">${message || (solved ? "Cinco casos favorables entre diez posibles: P(A)=5/10=1/2. La primera llave está activa." : "Si hay algo mal te lo indicaremos")}</div>
+          </section>         
+        </div>
+      </div>`, "wide");   
+
+      // Evento para abrir la ventana emergente de ayuda de Laplace
+    el("openLaplaceHelp")?.addEventListener("click", () => {
+      openModal(`
+        <div class="modal-header">
+          <div>
+            <h2>Regla de Laplace</h2>
+          </div>
+          <button class="close-modal" type="button" id="closeLaplaceHelpModal" aria-label="Cerrar">×</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-intro">Puedes ver la siguiente explicación para entender de qué se trata la Regla de Laplace</p>
+          <p style="margin-top: 20px;">
+            <a href="https://www.youtube.com/watch?v=UN9AgGbGlX8&t=154s" target="_blank" rel="noopener noreferrer" style="color: var(--bronze-bright); font-weight: bold; text-decoration: underline;">
+              Ver explicación en YouTube ↗
+            </a>
+          </p>
+        </div>
+      `, "narrow");
+
+      // Forzamos a que al cerrar este modal secundario de ayuda, regrese al puzzle de Laplace y no a central
+      const closeHelpBtn = modalRoot.querySelector("#closeLaplaceHelpModal");
+      if (closeHelpBtn) {
+        closeHelpBtn.addEventListener("click", () => {
+          openLaplacePuzzle();
+        });
+      }
+    });
+
+   // Control de los botones de sumar/restar en los diales
+    modalRoot.querySelectorAll("[data-dial]").forEach((button) => button.addEventListener("click", () => {
+      const key = button.dataset.dial;
+      state.laplace[key] = Math.max(0, Math.min(99, state.laplace[key] + Number(button.dataset.delta)));
+      save(); openLaplacePuzzle();
+    }));
+
+  // Botón para limpiar los valores
+    el("clearLaplace")?.addEventListener("click", () => {
+      state.laplace.numerator = 0; state.laplace.denominator = 0; save(); openLaplacePuzzle();
+    });
+
+  // Botón de validación directa de la fracción (5 / 10)
+    el("checkLaplace")?.addEventListener("click", () => {
+      state.laplace.attempts += 1;
+      save();
+      if (state.laplace.numerator === 5 && state.laplace.denominator === 10) {
+         solveFoundationalSeal("laplace", "Perfecto. Primera llave conseguida, se ha desbloqueado la segunda puerta.");
+      } else {
+         // 1. En lugar de pintar el error abajo, abrimos una nueva ventana emergente (modal)        
+          openModal(`
+            <div class="modal-header">
+              <div>
+                <h2>Combinación incorrecta❌</h2>
+              </div>
+              <button type="button" id="closeAboutCustom" class="close-modal" aria-label="Cerrar">&times;</button>
+            </div>
+            
+            <div class="modal-body">               
+              <div class="intro-meta" style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px;">
+                <p class="modal-intro">La proporción numérica no es correcta. Revisa los casos favorables y el total.</p> 
+              </div>
+            </div>    
+          `, "narrow");
+
+              // 3. Capturamos el botón de la cruz "X" del modal de error para que también te devuelva al puzzle
+              // Buscamos el botón de cierre que genera automáticamente tu función openModal
+          const modalCloseBtn = modalRoot.querySelector("[data-close-modal]") || modalRoot.querySelector(".close-modal") || modalRoot.querySelector("button img[alt*='cerrar']");
+            if (modalCloseBtn) {
+              // Clonamos el botón para remover cualquier evento de cierre por defecto que te saque del juego
+              const newCloseBtn = modalCloseBtn.cloneNode(true);
+              modalCloseBtn.parentNode.replaceChild(newCloseBtn, modalCloseBtn);
+              // Le asignamos que al hacer clic, simplemente vuelva a abrir el puzzle
+              newCloseBtn.addEventListener("click", () => {
+              openLaplacePuzzle();
+              });
+            }
+        }
+      });
+    };
+
+    /* ---------- Puzzle 02: Espacio muestral y suma de dados ---------- */
+  const randomDiceSumTarget = (previous = null) => {
+    const choices = [4, 5, 6, 7, 8, 9, 10];
+    const available = choices.filter((value) => value !== previous);
+    return available[Math.floor(Math.random() * available.length)];
+  };
+  const correctDiceSumKeys = (target) => {
+    const keys = [];
+    for (let a = 1; a <= 6; a += 1) for (let b = 1; b <= 6; b += 1) if (a + b === target) keys.push(`${a}-${b}`);
+    return keys;
+  };
+  const diceSumGridMarkup = () => {
+    const selected = new Set(state.diceSum.selected);
+    let html = "";
+    for (let a = 1; a <= 6; a += 1) {
+      for (let b = 1; b <= 6; b += 1) {
+        const key = `${a}-${b}`;
+        html += `<button type="button" class="dice-wall-cell ${selected.has(key) ? "selected" : ""}" data-dice-sum-cell="${key}" aria-pressed="${selected.has(key)}" aria-label="Par ${a}, ${b}; suma ${a + b}"><span>(${a},${b})</span></button>`;
+      }
+    }
+    return html;
+  };
+
+  // NUEVA FUNCIÓN: Modela la ventana emergente con las instrucciones aisladas
+  const openDiceSumInstructions = () => {
+    openModal(`${modalHeader("", "INSTRUCCIONES")}
+      <div class="modal-body">
+        <div class="intro-meta" style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px;">
+          <p class="modal-intro">     El tablero muestra varias celdas(dados) donde la suma de sus números nos da un resultado.
+            Seleccioná <strong>todas</strong> las celdas de dados que den el resultado OBJETIVO. </p>
+        </div>        
+      </div>`, "narrow"); 
+
+    // Lógica unificada para cuando el usuario avanza al puzzle (aplica para el botón y para la X)
+    const proceedToPuzzle = () => {
+      state.diceSum.instructionsRead = true; // Marcamos que ya las leyó para que no entren en bucle
+      save();
+      openDiceSumPuzzle(); // Cargamos el tablero del puzzle de forma inmediata
+    };    
+    
+    // CAPTURA DE LA "X": Interceptamos el botón de cierre para que NO ejecute el closeModal masivo
+    const closeXButton = modalRoot.querySelector(".close-modal");
+    if (closeXButton) {
+      // Le quitamos el atributo que activa tu closeModal global automático
+      closeXButton.removeAttribute("data-close-modal"); 
+      // Le asignamos nuestra redirección obligatoria al puzzle
+      closeXButton.addEventListener("click", (e) => {
+        e.preventDefault();
+        proceedToPuzzle();
+      });
+    }
+  };
+
+  const openDiceSumPuzzle = (message = "", messageType = "") => {
+    if (!state.seals.laplace) { showToast("La segunda puerta todavía no responde.", "bad"); return; }
+    
+    // EVALUACIÓN: Si nunca ha visto las instrucciones, detenemos el tablero y abrimos el aviso flotante
+    if (!state.diceSum.instructionsRead) {
+      openDiceSumInstructions();
+      return;
+    }
+
+    if (!state.diceSum.target) state.diceSum.target = randomDiceSumTarget();
+    const solved = state.seals.diceSum;
+    save();
+    
+    // Aquí el HTML ya no contiene el párrafo modal-intro con las instrucciones molestas
+    openModal(`${modalHeader("", "PUZZLE 02 · Espacio muestral y suma de dados")}
+      <div class="modal-body">
+        <div class="dice-sum-layout">
+          <section class="target-console">
+            <span>OBJETIVO</span><strong>${state.diceSum.target}</strong>  
+            <div class="modal-actions">
+              ${solved ? '<button class="button primary" type="button" data-close-modal>Volver</button>' : '<button class="button" type="button" id="openDadosHelp" style="font-size: 15px; padding: 8px 8px;">Ayuda</button><button class="button" type="button" id="clearDiceSum" style="font-size: 15px; padding: 5px 5px;">Reiniciar</button><button class="button primary" type="button" id="checkDiceSum" style="font-size: 16px; padding: 8px 8px;">Activar</button>'} 
+            </div>
+            <div class="feedback ${messageType}">${message || (solved ? `Los correctDiceSumKeys(state.diceSum.target).length pares que suman {state.diceSum.target} forman un suceso dentro de Ω. La segunda llave está activa.` : "El muro representa Ω: los 36 resultados posibles al lanzar dos dados.")}</div>
+          </section>
+          <div class="dice-wall" aria-label="Muro con 36 pares ordenados de dados">
+            <img src="${assetSrc("dice-sum-landscape.jpg")}" alt="Cuadrícula de seis por seis con pares de dados incrustados." />
+            <div class="dice-wall-grid">${diceSumGridMarkup()}</div>
+          </div>
+        </div>
+      </div>`, "wide");
+
+      // Evento para abrir la ventana emergente de ayuda
+      el("openDadosHelp")?.addEventListener("click", () => {
+      openModal(`
+        <div class="modal-header">
+          <div>
+            <h2>Probabilidad al lanzar los dados</h2>
+          </div>
+          <button class="close-modal" type="button" id="closeLaplaceHelpModal" aria-label="Cerrar">×</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-intro">Por medio de un ejemplo se explica cómo calcular la probabilidad al lanzar dos dados.</p>
+          <p style="margin-top: 20px;">
+            <a href="https://www.youtube.com/watch?v=7Fz8yu1Lhj8" target="_blank" rel="noopener noreferrer" style="color: var(--bronze-bright); font-weight: bold; text-decoration: underline;">
+              Ver explicación en YouTube ↗
+            </a>
+          </p>
+        </div>
+      `, "narrow");
+
+      // Forzamos a que al cerrar este modal secundario de ayuda, regrese al puzzle de Laplace y no a central
+      const closeHelpBtn = modalRoot.querySelector("#closeLaplaceHelpModal");
+      if (closeHelpBtn) {
+        closeHelpBtn.addEventListener("click", () => {
+          openDiceSumPuzzle();
+        });
+      }
+      }
+    );
+
+    // IMPORTANTE: En el tablero principal, si presionan la X, queremos que funcione de forma normal (cerrar el puzzle),
+    // pero reiniciamos el flag para que, si vuelven a entrar al puzzle desde el mapa del campamento, las instrucciones aparezcan de nuevo.
+    const mainCloseX = modalRoot.querySelector(".close-modal");
+    mainCloseX?.addEventListener("click", () => {
+      state.diceSum.instructionsRead = false;
+      save();
+    });
+
+    modalRoot.querySelectorAll("[data-dice-sum-cell]").forEach((button) => button.addEventListener("click", () => {
+      const next = new Set(state.diceSum.selected);
+      next.has(button.dataset.diceSumCell) ? next.delete(button.dataset.diceSumCell) : next.add(button.dataset.diceSumCell);
+      state.diceSum.selected = [...next]; save(); openDiceSumPuzzle();
+    }));
+  
+    el("clearDiceSum")?.addEventListener("click", () => { state.diceSum.selected = []; save(); openDiceSumPuzzle(); });
+    el("checkDiceSum")?.addEventListener("click", () => {
+      state.diceSum.attempts += 1;
+      const correct = correctDiceSumKeys(state.diceSum.target);
+      const selected = new Set(state.diceSum.selected);
+      const missing = correct.filter((key) => !selected.has(key));
+      const extras = [...selected].filter((key) => !correct.includes(key));
+      save();
+      if (!missing.length && !extras.length) solveFoundationalSeal("diceSum", `Felicidades, haz obtenido la segunda llave.`);
+      
+        else {
+          openModal(`
+            <div class="modal-header">
+              <div>
+                <h2>Combinación incorrecta❌</h2>
+              </div>
+              <button type="button" class="close-modal" aria-label="Cerrar">&times;</button>
+            </div>
+
+            <div class="modal-body">
+              <div class="intro-meta" style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px;">
+                <p class="modal-intro">
+                  La selección es incorrecta❌. Revisá que tengas **TODOS** los pares de dados que sumen el objetivo.
+                </p>
+              </div>
+            </div>
+          `, "narrow");
+
+          // Al cerrar la ventana, volvemos exactamente al tablero como estaba.
+          const modalCloseBtn =
+            modalRoot.querySelector("[data-close-modal]") ||
+            modalRoot.querySelector(".close-modal");
+
+          if (modalCloseBtn) {
+            const newCloseBtn = modalCloseBtn.cloneNode(true);
+            modalCloseBtn.parentNode.replaceChild(newCloseBtn, modalCloseBtn);
+
+            newCloseBtn.addEventListener("click", () => {
+              openDiceSumPuzzle();
+            });  }
+        }      }    );  };
+  
+  /* ---------- Puzzle 03: Diagrama de árbol ---------- */
+
+  // SOLO DEBE ABRIRSE LA PUERTA SI SE SELECCIONA Canoa: Grande / Chica + A pie: De noche
+  const treeRoutes = [
+    { id: "canoa-grande", label: "Canoa grande", lx: 29.0, ly: 19.5, px: 23.0, py: 81.0 },
+    { id: "canoa-chica", label: "Canoa chica", lx: 40.6, ly: 19.5, px: 31.4, py: 81.0 },
+    { id: "liana-alta", label: "Liana alta", lx: 49.0, ly: 19.5, px: 33.0, py: 81.0 },
+    { id: "liana-baja", label: "Liana baja", lx: 59.0, ly: 19.5, px: 33.0, py: 81.0 },
+    { id: "a-pie-dia", label: "Día", lx: 67.0, ly: 19.5, px: 33.0, py: 81.0 },
+    { id: "a-pie-noche", label: "Noche", lx: 76.0, ly: 19.5, px: 33.0, py: 81.0 },
+  ];
+
+  const openTreePuzzle = (message = "", messageType = "") => {
+    if (!state.seals.diceSum) { showToast("El camino permanece bloqueado: falta la segunda llave.", "bad"); return; }
+    const solved = state.seals.tree;
+    const selected = new Set(state.tree.selected);
+    const nodes = treeRoutes.map((route) => `<button type="button" class="tree-node ${selected.has(route.id) ? "selected" : ""}" style="--lx:${route.lx}%;--ly:${route.ly}%;--px:${route.px}%;--py:${route.py}%" data-tree-route="${route.id}" aria-pressed="${selected.has(route.id)}"><span>${route.label}</span></button>`).join("");
+    openModal(`${modalHeader("", "Puzzle 03 - DIAGRAMA DE ÁRBOL")}    
+          
+      <div class="modal-body">
+        <div class="tree-layout">
+          <div class="tree-wall">
+            <img src="${assetSrc("tree-landscape.jpg")}"
+                alt="Árbol de piedra con rutas de canoa, liana y a pie." />
+            <div class="tree-nodes">${nodes}</div>
+          </div>
+
+          <section class="tree-console">
+            <p class="case-counter">
+              <strong>${selected.size}</strong> rutas finales activadas
+            </p>          
+            <div class="modal-actions">
+              ${solved
+                ? '<button class="button primary" type="button" data-close-modal>Volver</button>'
+                : '<button class="button" type="button" id="openArbolHelp">Ayuda</button><button class="button" type="button" id="clearTree">Reiniciar</button><button class="button primary" type="button" id="checkTree">Activar</button>'}
+            </div>
+             <div class="feedback ${messageType}">
+              ${message || (solved
+                ? "El árbol termina en cuatro hojas: canoa grande, canoa chica, liana y a pie. La tercera llave está activa."
+                : "Pista: no todos estos medios de transporte van por tierra o aire.")}
+            </div>
+          </section>
+        </div>
+      </div>      
+    `, "wide" );    
+    
+    el("openArbolHelp")?.addEventListener("click", () => {
+      openModal(`
+        <div class="modal-header">
+          <div>
+            <h2>¿Qué es un Diagrama de Árbol?</h2>
+          </div>
+          <button class="close-modal" type="button" id="closeLaplaceHelpModal" aria-label="Cerrar">×</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-intro">Observa cómo resolver problemas de probabilidad usando el diagrama de árbol</p>
+          <p style="margin-top: 20px;">
+            <a href="https://www.youtube.com/watch?v=OpnuzWQKq3s" target="_blank" rel="noopener noreferrer" style="color: var(--bronze-bright); font-weight: bold; text-decoration: underline;">
+              Ver explicación en YouTube ↗
+            </a>
+          </p>
+        </div>
+      `, "narrow");
+
+      // Forzamos a que al cerrar este modal secundario de ayuda, regrese al puzzle de Laplace y no a central
+      const closeHelpBtn = modalRoot.querySelector("#closeLaplaceHelpModal");
+      if (closeHelpBtn) {
+        closeHelpBtn.addEventListener("click", () => {
+          openTreePuzzle();
+        });
+      }
+      }
+    );
+   
+    
+      modalRoot.querySelectorAll("[data-tree-route]").forEach((button) => button.addEventListener("click", () => {
+      const next = new Set(state.tree.selected);
+      next.has(button.dataset.treeRoute) ? next.delete(button.dataset.treeRoute) : next.add(button.dataset.treeRoute);
+      state.tree.selected = [...next]; save(); openTreePuzzle();
+    }));
+    el("clearTree")?.addEventListener("click", () => { state.tree.selected = []; save(); openTreePuzzle(); });
+    el("checkTree")?.addEventListener("click", () => {
+      state.tree.attempts += 1;
+      // Definís exactamente cuáles son los IDs correctos que deben estar seleccionados
+      const correct = ["canoa-grande", "canoa-chica", "a-pie-noche"];
+      // Verificamos que tenga la misma cantidad de elementos y que todos los correctos estén seleccionados
+      const exact = state.tree.selected.length === correct.length && 
+                  correct.every((id) => state.tree.selected.includes(id));
+      save();
+      if (exact) {
+      solveFoundationalSeal("tree", "Haz desbloqueado el camino, felicidades"); // O el mensaje de éxito que quieras
+      } else {       
+          openModal(`
+            <div class="modal-header">
+              <div><h2>Selección incorrecta❌</h2></div>
+              <button type="button" class="close-modal" aria-label="Cerrar">&times;</button>
+            </div>
+            <div class="modal-body">
+              <div class="intro-meta" style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px;">
+                <p class="modal-intro">
+                  Las rutas seleccionadas no corresponden o están incompletas. ¡Revisá el árbol!
+                </p>
+              </div>
+            </div>
+          `, "narrow");
+
+          // Al cerrar la ventana, volvemos exactamente al tablero como estaba.
+          const modalCloseBtn =
+            modalRoot.querySelector("[data-close-modal]") ||
+            modalRoot.querySelector(".close-modal");
+
+          if (modalCloseBtn) {
+            const newCloseBtn = modalCloseBtn.cloneNode(true);
+            modalCloseBtn.parentNode.replaceChild(newCloseBtn, modalCloseBtn);
+
+            newCloseBtn.addEventListener("click", () => {
+              openTreePuzzle();
+            });  }       
+    
+      }
+    });
+  };
+
+  /* ---------- Puzzle 04: Sala de las 36 huellas ---------- */
+  const correctDiceKeys = () => {
+    const result = [];
+    for (let a = 1; a <= 6; a += 1) for (let b = 1; b <= 6; b += 1) if (a === 6 || b === 6) result.push(`${a}-${b}`);
+    return result;
+  };
+  const diceGridMarkup = () => {
+    const selected = new Set(state.dice.selected);
+    let html = "";
+    for (let a = 1; a <= 6; a += 1) {
+      for (let b = 1; b <= 6; b += 1) {
+        const key = `${a}-${b}`;
+        html += `<button type="button" class="sample-cell ${selected.has(key) ? "selected" : ""} ${key === "6-6" && selected.has(key) ? "intersection" : ""}" data-dice-cell="${key}" aria-pressed="${selected.has(key)}">(${a},${b})</button>`;
+      }
+    }
+    return html;
+  };
+
+  
+    /* ---------- Instrucciones ---------- */
+    const openDiceInstructions = () => {
+      openModal(`
+        ${modalHeader("", "INSTRUCCIONES")}
+
+        <div class="modal-body">
+          <div class="intro-meta" style="display:flex; flex-wrap:wrap; gap:10px; margin-top:20px;">
+            <p class="modal-intro">
+              <strong>¿Cómo leer la tabla?</strong><br>
+              El primer dado indica la fila. El segundo dado indica la columna.
+              Ejemplo: <strong>(1,1)</strong>. El primer número corresponde a la fila
+              y el segundo a la columna.<br>
+              <strong>TU MISIÓN:</strong> El jaguar despierta cuando al menos uno de los dados
+              (celdas) muestra 6. Marcá todas las casillas que cumplen esta condición. 
+              <i>Una casilla representa un resultado posible y varias juntas forman un suceso A⊆Ω.</i>.
+            </p>
+          </div>          
+        </div>
+      `, "narrow");
+
+      const proceedToPuzzle = () => {
+        state.dice.instructionsRead = true;
+        save();
+        openDicePuzzle();
+      };
+
+      // Al pulsar la X, también avanzamos al tablero.
+      const closeXButton = modalRoot.querySelector(".close-modal");
+
+      if (closeXButton) {
+        closeXButton.removeAttribute("data-close-modal");
+        closeXButton.addEventListener("click", (e) => {
+          e.preventDefault();
+          proceedToPuzzle();
+        });
+      }
+    };
+
+
+    const openDicePuzzle = (message = "") => {
+       // Si no leyó las instrucciones, mostrarlas antes del tablero.
+    if (!state.dice.instructionsRead) {
+      openDiceInstructions();
+      return;
+    }
+    const solved = state.seals.dice;
+
+    openModal(`${modalHeader("", "Puzzle 04 Las 36 huellas")}
+      <div class="modal-body">        
+        <div class="dice-lab">
+            <section class="dice-console">              
+             <div class="feedback">El jaguar despierta cuando al menos uno de los dados (celdas) muestra 6. Selecciona todas las celdas de dados que apliquen</div>
+              
+              <div class="dice-actions">
+                ${solved
+                  ? '<button class="button primary" type="button" data-close-modal>Volver al escenario</button>'
+                  : '<button class="button primary" type="button" id="checkDice">Activar mecanismo</button>'}
+                <button class="stone-button" type="button" id="clearDice" ${solved ? "disabled" : ""}>Limpiar</button>
+              </div>
+              <p class="case-counter"><strong id="caseCount">${state.dice.selected.length}</strong> celdas seleccionadas</p>
+            </section>
+            <section class="grid-console"> 
+              <div class="sample-grid" id="sampleGrid" aria-label="Espacio muestral de 36 resultados">${diceGridMarkup()}</div>
+              </section>            
+        </div>        
+        </div>`, "wide");
+
+    const refreshGrid = () => {
+      el("sampleGrid").innerHTML = diceGridMarkup();
+      el("caseCount").textContent = String(state.dice.selected.length);
+      bindGridCells();
+    };
+    const bindGridCells = () => {
+      modalRoot.querySelectorAll("[data-dice-cell]").forEach((button) => button.addEventListener("click", () => {
+        const chosen = new Set(state.dice.selected);
+        chosen.has(button.dataset.diceCell) ? chosen.delete(button.dataset.diceCell) : chosen.add(button.dataset.diceCell);
+        state.dice.selected = [...chosen];
+        save(); refreshGrid();
+      }));
+    };
+    bindGridCells();     
+    el("clearDice")?.addEventListener("click", () => { state.dice.selected = []; state.dice.rowUsed = false; state.dice.columnUsed = false; save(); refreshGrid(); });
+    el("checkDice")?.addEventListener("click", () => {
+      state.dice.attempts += 1;
+      const selected = new Set(state.dice.selected);
+      const correct = correctDiceKeys();
+      const missing = correct.filter((key) => !selected.has(key));
+      const extras = [...selected].filter((key) => !correct.includes(key));
+      save();
+      if (!missing.length && !extras.length) {
+        solveSeal("dice", "Perfecto. Se ha desbloqueado el puzzle 5.");
+      } else {              
+          openModal(`
+            <div class="modal-header">
+              <div><h2>Selección incorrecta❌</h2></div>
+              <button type="button" class="close-modal" aria-label="Cerrar">&times;</button>
+            </div>
+            <div class="modal-body">
+              <div class="intro-meta" style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px;">
+                <p class="modal-intro">
+                  Asegurate de seleccionar las celdas donde por lo menos haya un 6.
+                </p>
+              </div>
+            </div>
+          `, "narrow");
+
+          // Al cerrar la ventana, volvemos exactamente al tablero como estaba.
+          const modalCloseBtn =
+            modalRoot.querySelector("[data-close-modal]") ||
+            modalRoot.querySelector(".close-modal");
+
+          if (modalCloseBtn) {
+            const newCloseBtn = modalCloseBtn.cloneNode(true);
+            modalCloseBtn.parentNode.replaceChild(newCloseBtn, modalCloseBtn);
+
+            newCloseBtn.addEventListener("click", () => {
+              openDicePuzzle();
+            });  }      
+      }
+    });
+  };
+
+  /* ---------- Puzzle 05 Las Monedas ---------- */
+  const coinStatsMarkup = () => {
+    const latest = state.coin.runs[1000] || state.coin.runs[100] || state.coin.runs[20];
+    const heads = latest?.heads || 0; const tails = latest?.tails || 0; const total = heads + tails || 1;
+    const headPct = heads / total * 100; const tailPct = tails / total * 100;
+    return `<div class="stat-line"><span>Caras</span><div class="meter"><span style="width:${headPct}%"></span></div><strong>${heads}</strong></div>
+      <div class="stat-line"><span>Cruces</span><div class="meter tails"><span style="width:${tailPct}%"></span></div><strong>${tails}</strong></div>
+      <p class="feedback">Frecuencia relativa de cara: <strong>${latest ? (latest.ratio * 100).toFixed(1) : "0,0"}%</strong>. Predicción para una moneda equilibrada: P(cara)=1/2.</p>`;
+  };
+
+  /* ---------- Instrucciones ---------- */
+    const openCoinPuzzleInstructions = () => {
+      openModal(`
+      ${modalHeader("", "INSTRUCCIONES")}
+      <div class="modal-body">
+        <div class="intro-meta" style="display:flex; flex-wrap:wrap; gap:10px; margin-top:20px;">
+          <p class="modal-intro">
+            La fuente separa caras y cruces. Ejecutá las tres tandas y observá cómo 
+            cambia la proporción. Cada resultado se genera al accionar la palanca.        
+          </p>
+        </div>          
+      </div>
+    `, "narrow");
+
+      const proceedToPuzzle = () => {
+        state.coin.instructionsRead = true; // Marcamos como leídas
+        save();
+        openCoinPuzzle(); // Abrimos el puzzle principal
+      };
+
+      // Al pulsar la X, guardamos y avanzamos al tablero del puzzle.
+      const closeXButton = modalRoot.querySelector(".close-modal");
+      if (closeXButton) {
+        closeXButton.removeAttribute("data-close-modal");
+        closeXButton.addEventListener("click", (e) => {
+          e.preventDefault();
+          proceedToPuzzle();
+        });
+      }
+    };
+
+  const openCoinPuzzle = (message = "", messageType = "") => {
+    if (!state.coin.instructionsRead) {
+      openCoinPuzzleInstructions();
+      return;
+    }
+    const solved = state.seals.coin;
+    openModal(`${modalHeader("", "Puzzle 05 La fuente de las monedas")}
+      <div class="modal-body">
+        <div class="coin-lab">
+          <section class="coin-console">
+            <div class="coin-disc" id="coinDisc" aria-label="Moneda ceremonial"></div>
+            <div class="batch-buttons">
+              ${[20,100,1000].map((n) => `<button class="stone-button" type="button" data-coin-run="${n}" ${solved ? "disabled" : ""}>${n} lanzamientos ${state.coin.runs[n] ? "": ""}</button>`).join("")}
+            </div>
+          </section>
+          <section class="coin-console" id="coinStats">${coinStatsMarkup()}
+            <div id="coinFeedback" class="feedback ${messageType}">${message || (solved ? "La frecuencia observada varía entre experimentos; la probabilidad describe el patrón esperado a largo plazo." : "Compará, no adivines: las tres tandas pertenecen al mismo experimento aleatorio.")}</div>
+        
+          </section>
+        </div>
+        <h3>¿Qué inscripción describe lo observado?</h3>
+        <div class="observation-list">
+          <button class="stone-button" type="button" data-coin-choice="exact" ${solved ? "disabled" : ""}>Con suficientes lanzamientos siempre obtendremos exactamente la mitad de cada lado.</button>
+          <button class="stone-button" type="button" data-coin-choice="stable" ${solved ? "disabled" : ""}>Con muchas repeticiones, la proporción suele estabilizarse cerca de la mitad, aunque no tiene que ser exacta.</button>
+          <button class="stone-button" type="button" data-coin-choice="small" ${solved ? "disabled" : ""}>La tanda de 20 revela mejor la probabilidad porque puede producir resultados más extremos.</button>
+        </div>
+        ${solved ? '<div class="modal-actions"><button class="button primary" type="button" data-close-modal>Volver al escenario</button></div>' : ""}
+      </div>`, "wide");
+
+    const mainCloseX = modalRoot.querySelector(".close-modal");
+    mainCloseX?.addEventListener("click", () => {
+      state.coin.instructionsRead = false;
+      save();
+    });
+
+    modalRoot.querySelectorAll("[data-coin-run]").forEach((button) => button.addEventListener("click", () => {
+      const n = Number(button.dataset.coinRun);
+      let heads = 0;
+      for (let i = 0; i < n; i += 1) if (Math.random() < .5) heads += 1;
+      const result = { heads, tails: n - heads, ratio: heads / n };
+      state.coin.runs[n] = result;
+      save();
+      const disc = el("coinDisc");
+      disc.classList.add("flipping");
+      if (heads < n / 2) disc.classList.add("tails"); else disc.classList.remove("tails");
+      beep(360 + Math.min(n, 1000) / 4, .12);
+      setTimeout(() => openCoinPuzzle(`Tanda de ${n}: ${heads} caras y ${n - heads} cruces. Esto es una observación, no una promesa para la próxima tanda.`, "good"), 420);
+    }));
+    modalRoot.querySelectorAll("[data-coin-choice]").forEach((button) => button.addEventListener("click", () => {
+      state.coin.attempts += 1;
+      const complete = [20,100,1000].every((n) => state.coin.runs[n]);
+      save();
+      if (!complete) {
+        openCoinPuzzle("Antes de interpretar, accioná las tres palancas: 20, 100 y 1000 lanzamientos.", "bad");
+      } else if (button.dataset.coinChoice === "stable") {
+        solveSeal("coin","Perfecto, el puzzle 6 se ha desbloqueado");
+      } else if (button.dataset.coinChoice === "exact") {
+        openCoinPuzzle("Muchas repeticiones no obligan a obtener exactamente 50 %. Observá tu propia tanda de 1000: puede acercarse sin coincidir.", "bad");
+      } else {
+        openCoinPuzzle("Una tanda pequeña puede fluctuar más. No revela mejor el patrón: ofrece menos evidencia acumulada.", "bad");
+      }
+    }));
+  };
+
+  /* ---------- Puzzle 06 -Enfoque subjetivo: revisar creencias ---------- */
+
+    const openSubjectiveInstructions = () => {
+      openModal(`${modalHeader("", "INSTRUCCIONES")}
+        <div class="modal-body">
+          <div class="intro-meta">
+            <p class="modal-intro">
+              El medidor representa tu grado de confianza en que la ruta es segura.
+              Primero registrá tu estimación inicial. Después, revisá tu confianza según las
+              nuevas evidencias que encuentres. No existe un porcentaje exacto: lo importante
+              es justificar tu decisión y cambiarla cuando aparezca información relevante.
+            </p>
+          </div>
+          <div class="modal-actions">
+            <button class="button primary" type="button" id="understandSubjectiveInstructions">
+              Entendido
+            </button>
+          </div>
+        </div>`, "narrow");
+
+      const proceedToPuzzle = () => {
+        state.subjective.instructionsRead = true;
+        save();
+        openSubjectivePuzzle();
+      };
+
+      el("understandSubjectiveInstructions")
+        ?.addEventListener("click", proceedToPuzzle);
+
+      const closeXButton = modalRoot.querySelector(".close-modal");
+
+      if (closeXButton) {
+        closeXButton.removeAttribute("data-close-modal");
+        closeXButton.addEventListener("click", (e) => {
+          e.preventDefault();
+          proceedToPuzzle();
+        });
+      }
+    };
+ 
+  const openSubjectivePuzzle = (message = "", messageType = "") => {
+    if (!state.subjective.instructionsRead) {
+    openSubjectiveInstructions();
+    return;
+  }
+
+    // --- REPRODUCIR AUDIO EN EL MODAL ---
+    const nivel06Audio = document.getElementById("nivel06Audio");
+    if (nivel06Audio && state.settings.sound) {
+      nivel06Audio.play().catch(() => {});
+    }
+    // -------------------------------------
+
+    const solved = state.seals.subjective;
+    const stage = state.subjective.stage;
+    const currentValue = stage === 0 ? state.subjective.initial : stage === 1 ? state.subjective.afterPositive : state.subjective.final;
+    const clues = [
+      { title: "Indicio inicial", body: "Las huellas de Arraiga se pueden observar. Pero el registro está incompleto: no se conocen todos los resultados posibles de que sea un camino seguro." },
+      { title: "Evidencia favorable", body: "Aparece una lámpara tirada y marcas de Arraiga en el suelo." },
+      { title: "Evidencia contraria", body: "Polvo cae del techo. Y el puente esta roto, posiblemente despues de que haya pasado Arraiga." },
+    ];
+    openModal(`${modalHeader("", "Puzzle 06 El pasaje")}
+      <div class="modal-body">
+        <div class="belief-lab">
+          <section class="belief-console">
+            <div class="belief-value" id="beliefValue">${currentValue}%</div>
+            <label for="beliefRange"><strong>¿Cuál es tu nivel de confianza en el camino?</strong></label>
+            <input id="beliefRange" type="range" min="0" max="100" step="5" value="${currentValue}" ${solved ? "disabled" : ""} />
+            <div class="range-labels"><span>Muy baja</span><span>Incierta</span><span>Muy alta</span></div>
+            <div class="modal-actions">
+              ${!solved && stage === 0 ? '<button class="button primary" type="button" id="lockInitial">Registrar estimación inicial</button>' : ""}
+              ${!solved && stage === 1 ? '<button class="button primary" type="button" id="lockPositive">Actualizar con la nueva evidencia</button>' : ""}
+              ${!solved && stage >= 2 ? '<button class="button primary" type="button" id="lockFinal">Activar conclusión</button>' : ""}
+            </div>
+          </section>
+          <section class="clue-stack">
+            ${clues.map((clue, i) => `<article class="clue-card ${i <= stage || solved ? "" : "locked"}"><strong>${i <= stage || solved ? clue.title : "Nicho sellado"}</strong><span>${i <= stage || solved ? clue.body : "Registrá tu decisión para revelar la siguiente evidencia."}</span></article>`).join("")}
+          </section>
+        </div>
+        <div id="subjectiveFeedback" class="feedback ${messageType}">${message || (solved ? `Tu estimación pasó de ${state.subjective.initial}% a ${state.subjective.afterPositive}% y luego a ${state.subjective.final}%. No calculaste una frecuencia: revisaste una creencia a partir de evidencia incompleta.` : stage === 0 ? "Elegí una confianza razonable sin fingir certeza." : stage === 1 ? "La nueva evidencia favorece la ruta oriental. ¿Cómo debería cambiar tu confianza?" : "Ahora apareció un riesgo nuevo. Una creencia razonada debe poder bajar.")}</div>
+        ${solved ? '<div class="modal-actions"><button class="button primary" type="button" data-close-modal>Volver al escenario</button></div>' : ""}
+      </div>`, "wide");
+    const range = el("beliefRange");
+    range?.addEventListener("input", () => { el("beliefValue").textContent = `${range.value}%`; });
+    el("lockInitial")?.addEventListener("click", () => {
+      const value = Number(range.value);
+      state.subjective.attempts += 1;
+      if (value < 20 || value > 80) {
+        openSubjectivePuzzle("Con indicios ambiguos, marcar certeza casi total oculta la incertidumbre. Elegí un punto entre 20 % y 80 %.", "bad");
+        return;
+      }
+      state.subjective.initial = value;
+      state.subjective.afterPositive = value;
+      state.subjective.stage = 1;
+      save(); openSubjectivePuzzle("Registrado. Se abre el segundo nicho: apareció una evidencia favorable a la ruta oriental.", "good");
+    });
+    el("lockPositive")?.addEventListener("click", () => {
+      const value = Number(range.value);
+      state.subjective.attempts += 1;
+      if (value < state.subjective.initial + 10) {
+        openSubjectivePuzzle("La lámpara reciente y la marca de Arraiga favorecen esa ruta. Tu confianza debería aumentar de manera visible.", "bad");
+        return;
+      }
+      state.subjective.afterPositive = value;
+      state.subjective.final = value;
+      state.subjective.stage = 2;
+      save(); openSubjectivePuzzle("La confianza aumentó, pero el tercer nicho revela un puente inestable.", "good");
+    });
+    el("lockFinal")?.addEventListener("click", () => {
+      const value = Number(range.value);
+      state.subjective.attempts += 1;
+      if (value > state.subjective.afterPositive - 10) {
+        openSubjectivePuzzle("Apareció evidencia contraria. Mantener la misma confianza ignoraría información relevante; revisala hacia abajo.", "bad");
+        return;
+      }
+      state.subjective.final = value;
+      save(); solveSeal("subjective","Felicidades, ahora puedes avanzar");
+    });
+  };
+
+  
+  /* ---------- Axiomas: experiencia + drag and drop ---------- */
+  const axiomRules = [
+    { id: "nonnegative", text: "Ningún suceso puede pesar menos que cero.", zone: "event" },
+    { id: "whole", text: "El recorrido completo Ω pesa uno.", zone: "whole" },
+    { id: "disjoint", text: "Si dos rutas no pueden ocurrir juntas, sus pesos se suman.", zone: "disjoint" },
+    { id: "equal", text: "Todos los sucesos tienen siempre el mismo peso.", zone: null },
+    { id: "duplicate", text: "Una ruta compartida se cuenta dos veces.", zone: null },
+    { id: "over", text: "El peso total puede superar uno si hay muchas rutas.", zone: null },
+  ];
+  let selectedRuleTile = null;
+
+  const axiomTileMarkup = () => axiomRules.map((rule) => {
+    const placed = Object.values(state.axiom.placements).includes(rule.id);
+    return `<button type="button" class="rule-tile ${placed ? "placed" : ""}" draggable="${!placed}" data-rule-tile="${rule.id}" aria-pressed="false">${rule.text}</button>`;
+  }).join("");
+
+  const axiomZoneMarkup = () => {
+    const zones = [
+      ["event", "Regla para cualquier suceso"],
+      ["whole", "Regla para todo el espacio Ω"],
+      ["disjoint", "Regla para rutas incompatibles"],
+    ];
+    return zones.map(([id, label]) => {
+      const tileId = state.axiom.placements[id];
+      const tile = axiomRules.find((item) => item.id === tileId);
+      const correct = tile?.zone === id;
+      return `<button type="button" class="drop-zone ${correct ? "correct" : ""}" data-rule-zone="${id}"><small>${label}</small><span class="placed-copy">${tile ? tile.text : "Arrastrá una tablilla o tocá aquí después de seleccionarla."}</span></button>`;
+    }).join("");
+  };
+
+  const openAxiomPuzzle = (message = "", messageType = "") => {
+    
+    const solved = state.seals.axiom;
+    const step = state.axiom.step || 1;
+
+    openModal(`${modalHeader("MECANISMO IV", "La balanza de Ω")}
+      <div class="modal-body">
+        ${step === 1 ? `
+          <p class="modal-intro">La cámara rechaza pesos imposibles. Primero observá y anota sus tres comportamientos; después ubica las tablillas en el sector correcto.</p>
+          <section class="axiom-demo">
+            <article><strong>Peso −0,20</strong><p>La balanza lo expulsa inmediatamente: una probabilidad nunca puede ser negativa.</p><button class="stone-button" type="button" data-demo="negative">Probar</button></article>
+            <article><strong>0,30 + 0,70</strong><p>Las piezas completan el disco Ω y equilibran la balanza en 1.</p><button class="stone-button" type="button" data-demo="whole">Probar</button></article>
+            <article><strong>0,35 + 0,25</strong><p>Dos canales que no pueden abrirse juntos llevan un peso combinado de 0,60.</p><button class="stone-button" type="button" data-demo="disjoint">Probar</button></article>
+          </section>
+          <div id="axiomFeedback" class="feedback ${messageType}">${message || (solved ? "Las reglas formales aparecen después de haberlas usado. La suma directa exige que los sucesos sean disjuntos." : "Hay tres tablillas correctas y tres afirmaciones que romperían el mecanismo.")}</div>
+          <div class="modal-actions">
+            <button class="button primary" type="button" id="propiedades">Ayuda</button>
+            <button class="button primary" type="button" id="nextAxiomStep">Siguiente</button>
+          </div>
+        ` : `
+          ${solved ? `<div class="formal-reveal">P(A) ≥ 0 &nbsp;·&nbsp; P(Ω)=1 &nbsp;·&nbsp; Si A∩B=∅, P(A∪B)=P(A)+P(B)</div>` : `
+            
+            <div class="drag-layout">
+              <div class="tile-bank" aria-label="Tablillas disponibles">${axiomTileMarkup()}</div>
+              <div class="drop-zones" aria-label="Destinos de las reglas">${axiomZoneMarkup()}</div>
+            </div>
+          `}
+          <div id="axiomFeedback" class="feedback ${messageType}">${message || (solved ? "Las reglas formales aparecen después de haberlas usado. La suma directa exige que los sucesos sean disjuntos." : "Hay tres tablillas correctas y tres afirmaciones que romperían el mecanismo.")}</div>
+          <div class="modal-actions">
+            <button class="button" type="button" id="prevAxiomStep">Volver</button>
+            ${solved ? '<button class="button primary" type="button" data-close-modal>Volver al escenario</button>' : '<button class="button" type="button" id="clearAxiom">Retirar tablillas</button><button class="button primary" type="button" id="checkAxiom">Activar</button>'}
+          </div>
+        `}
+      </div>`, "wide");
+
+      el("propiedades")?.addEventListener("click", () => {
+      openModal(`
+        <div class="modal-header">
+          <div>
+            <h2>Reglas importantes</h2>
+          </div>
+          <button class="close-modal" type="button" id="closeLaplaceHelpModal" aria-label="Cerrar">×</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-intro">Mira las propiedades de la Probabilidad</p>
+          <p style="margin-top: 20px;">
+            <a href="https://www.youtube.com/watch?v=IMxCjH4HfV4&t=15s" target="_blank" rel="noopener noreferrer" style="color: var(--bronze-bright); font-weight: bold; text-decoration: underline;">
+              Ver explicación en YouTube ↗
+            </a>
+          </p>
+        </div>
+      `, "narrow");
+
+      // Forzamos a que al cerrar este modal secundario de ayuda, regrese al puzzle de Laplace y no a central
+      const closeHelpBtn = modalRoot.querySelector("#closeLaplaceHelpModal");
+      if (closeHelpBtn) {
+        closeHelpBtn.addEventListener("click", () => {
+          openAxiomPuzzle();
+        });
+      }
+    });
+
+      
+
+      modalRoot.querySelectorAll("[data-demo]").forEach((button) => button.addEventListener("click", () => {
+      const messages = {
+        negative: "El peso negativo cae fuera de la bandeja: P(A)≥0.",
+        whole: "El disco queda completo: todos los resultados de Ω reúnen probabilidad 1.",
+        disjoint: "Los canales son incompatibles; sus pesos pueden sumarse directamente: 0,35+0,25=0,60.",
+      };
+      const fb = el("axiomFeedback");
+      if (fb) {
+        fb.className = "feedback good";
+        fb.textContent = messages[button.dataset.demo];
+      }
+      beep(510, .08);
+      }));    
+
+      // Controladores para cambiar de sección con los botones Siguiente / Volver
+      el("nextAxiomStep")?.addEventListener("click", () => {
+      state.axiom.step = 2;
+      save();
+      openAxiomPuzzle();
+      });
+
+      el("prevAxiomStep")?.addEventListener("click", () => {
+        state.axiom.step = 1;
+        save();
+        openAxiomPuzzle();
+      });
+
+      const place = (tileId, zoneId) => {
+      if (!tileId || solved) return;
+      Object.keys(state.axiom.placements).forEach((zone) => { if (state.axiom.placements[zone] === tileId) delete state.axiom.placements[zone]; });
+      state.axiom.placements[zoneId] = tileId;
+      selectedRuleTile = null;
+      save(); openAxiomPuzzle("Tablilla colocada. Podés reemplazarla antes de comprobar.", "good");
+      };
+
+      modalRoot.querySelectorAll("[data-rule-tile]").forEach((button) => {
+      button.addEventListener("dragstart", (event) => event.dataTransfer.setData("text/plain", button.dataset.ruleTile));
+      button.addEventListener("click", () => {
+        selectedRuleTile = button.dataset.ruleTile;
+        modalRoot.querySelectorAll("[data-rule-tile]").forEach((item) => item.classList.toggle("selected", item === button));
+        button.setAttribute("aria-pressed", "true");
+        const fb = el("axiomFeedback");
+        if (fb) fb.textContent = "Tablilla seleccionada. Ahora tocá uno de los tres destinos.";
+        });
+      });
+      modalRoot.querySelectorAll("[data-rule-zone]").forEach((zone) => {
+      zone.addEventListener("dragover", (event) => { event.preventDefault(); zone.classList.add("over"); });
+      zone.addEventListener("dragleave", () => zone.classList.remove("over"));
+      zone.addEventListener("drop", (event) => { event.preventDefault(); place(event.dataTransfer.getData("text/plain"), zone.dataset.ruleZone); });
+      zone.addEventListener("click", () => place(selectedRuleTile, zone.dataset.ruleZone));
+      });
+
+      el("clearAxiom")?.addEventListener("click", () => { state.axiom.placements = {}; selectedRuleTile = null; save(); openAxiomPuzzle(); });
+    el("checkAxiom")?.addEventListener("click", () => {
+      state.axiom.attempts += 1;
+      const correct = ["event", "whole", "disjoint"].every((zone) => axiomRules.find((rule) => rule.id === state.axiom.placements[zone])?.zone === zone);
+      save();
+      if (correct) {
+        if (!state.seals.axiom) {
+          state.seals.axiom = true;
+          
+          save();
+        }
+        closeModal();
+        goTo("axiom_2", "<i>¡La puerta se ha abierto!</i>");
+       
+      } else {
+        const filled = Object.keys(state.axiom.placements).length;
+        openAxiomPuzzle(filled < 3 ? "Todavía hay ranuras vacías. Cada regla describe un comportamiento distinto de la balanza." : "Alguna tablilla contradice lo que acabás de observar. Recordá que la suma directa exige rutas incompatibles.", "bad");
+      }
+    });
+  };
+  
+
+  /* ---------- Final ---------- */
+  const openEnding = () => {
+
+    // --- REPRODUCIR AUDIO EN EL MODAL ---
+    const finalAudio = document.getElementById("finalAudio");
+    if (finalAudio && state.settings.sound) {
+      finalAudio.play().catch(() => {});
+    }
+    // -------------------------------------
+
+    state.endingSeen = true;
+    save();
+    openModal(`${modalHeader("CÁMARA DEL HORIZONTE", "El verdadero legado")}
+      <div class="modal-body">
+        <p class="modal-intro">Las siete llaves encajan. El contrapeso libera a Arraiga y la primera luz del amanecer atraviesa el archivo mecánico.</p>
+        <div class="seal-row">${Object.values(state.seals).map(() => '<span class="seal-dot on">✓</span>').join("")}</div>
+        <div class="feedback good">Completaste la expedición usando Laplace, espacio muestral, suma de dados, diagrama de árbol, frecuencia relativa, creencia subjetiva y axiomas.</div>
+        <div class="modal-actions">          
+          <button class="button primary" type="button" id="activarSalida">Activar palanca</button>
+          </div>
+      </div>`, "wide");
+
+   el("activarSalida").addEventListener("click", () => {
+      // 1. Cerramos la ventana modal del final primero
+      closeModal();
+      
+      // 2. Actualizamos la escena de fondo y la guardamos
+      state.currentScene = "vault2";
+      save();
+      renderScene();
+      
+      // 3. Disparamos la cadena de diálogos de León Arraiga
+      showDialogue(
+        "León Arraiga", 
+        "<i>No sabes cuánto te agradezco, joven</i>", 
+        () => {
+          showDialogue(
+            "León Arraiga", 
+            "<i>Creí que Tharum había construido un oráculo. Pero en realidad construyó una defensa <strong>contra la certeza falsa</strong>. No enseña qué va a ocurrir... enseña a pensar cuando no podemos saberlo.</i>", 
+            () => {                
+              showDialogue(
+                "León Arraiga", 
+                "<i>¡Vamos! Salgamos de una vez de aquí</i>",
+                () => {
+                  goTo("vault3");
+                }
+              ); 
+            }
+          ); 
+        }
+      );
+    });
+  };
+  // CREDITOS FINALES
+  const openCreditsModal = () => {
+    openModal(`
+      <div class="intro-modal">
+        <div class="modal-body">
+          
+          <h1 class="intro-title">Gracias por jugar<span>Santuario Ω : Las ruinas de Tharum</span></h1>
+          <div class="intro-story-grid">
+            <img class="intro-image2" src="${assetSrc("jungle-intro.webp")}" alt="Selva húmeda de Indonesia" />
+            <div>
+              <h3 style="margin-top: 0; color: #f2cb73;">Créditos a</h3>
+              <p class="modal-intro" style="margin-bottom: 15px;">
+                Macchia Juan<br>
+                Orquera Melany<br>
+                Ortiz Liliana
+              </p>
+              <h3 style="color: #f2cb73;">Profesor</h3>
+              <p class="modal-intro">
+                Santiago Fiore
+              </p>
+              <h3 style="color: #f2cb73;">Materia</h3> 
+              <p class="modal-intro">Modelización</p>
+            </div>
+          </div>
+          
+          <div class="modal-actions" style="margin-top: 25px; justify-content: flex-end;">
+            <button class="button primary" type="button" id="replayGame">Volver a jugar</button>
+          </div>
+        </div>
+      </div>
+    `, "wide");
+
+    // Evento para reiniciar el juego al presionar "Volver a jugar"
+    el("replayGame")?.addEventListener("click", () => {
+      resetGame(false); // Reinicia todo el progreso
+    });
+  };
+
+  ///SECCION DIALOGOS 
+
+  const handleAction = (action) => {
+    beep(390, .045);
+    const actions = {
+      ///CAMPAMENTO
+      journal: () => {
+        state.journalTaken = true; state.notesUnlocked = Math.max(0, state.notesUnlocked); save();
+        
+        showDialogue(
+        "Cuaderno de Arraiga", 
+        "<i>Según lo que dice este cuaderno, León Arraiga es un arqueólogo, quién parece que intentaba descubrir una especie de antigua civilización. Hay más notas aquí...</i>", 
+        () => {
+            // Esta función se ejecuta justo cuando el jugador cierra el primer diálogo
+            showDialogue(
+                "Nota del cuaderno", 
+                "Día 1: “¡Por fin encontré las ruinas de Tharum! Mis colegas se niegan a venir. Tendré que arreglármelas solo.” Día 2: “Si alguien encuentra estas páginas, no confunda una posibilidad con una certeza.” Firma: León Arraiga"
+            );
+          }
+        );       
+      },
+      radio: () => showDialogue("Radio averiada", "Grabación: “Arraiga, la tormenta... [interferencia]... llega al valle... Responda. No entre solo.”"),
+      lantern: () => showDialogue("Linterna", "<i>Todavía está tibia. ¿Qué pasó?.</i>"),
+      backpack: () => showDialogue("Mochila", "<i>Parece que hay un listado de cosas que indican que esta persona se llevo consigo una cantimplora, una cuerda y un medallón. ¿seguirá viva?</i>"),
+      enter: () => {
+        if (!state.journalTaken) { showDialogue("Instinto", "<i>No quiero entrar sin saber a qué me enfrento. Debería leer el cuaderno abierto sobre el baúl.</i>"); revealHotspots(); }
+        else if (!state.tentNotesRead) { showDialogue("Instinto", "<i>El cuaderno menciona más notas dentro de la tienda. Debería leerlas antes de cruzar el umbral.</i>"); revealHotspots(); }
+        else goTo("central", "Al entrar, no te das cuenta pero pisas un bloque que se hunde y entonces la puerta se cierra: Para avanzar tienes que recuperar las 3 llaves de esta sala.");
+      },
+     
+      /// DENTRO DE LA TIENDA DE ARRAIGA
+      enterTent: () => goTo("tent", "<i>Parace que esta persona 'León' estaba investigando algo aquí</i>"),
+      tentMap: () => { state.tentMapRead = true; save(); showDialogue("Mapa de la expedición", "Varias fotografías de templos antiguos con una anotación: “Tharum no es una leyenda”."); },
+      tentNotes: () => { state.tentNotesRead = true; save(); showDialogue("Notas de León", "El grupo exigía por lo menos un 50 % de seguridad antes de financiar el viaje. León interpretó un indicio como certeza y partió solo. En otra hoja escribió: “Experimento aleatorio: conozco los resultados posibles, pero no puedo predecir con certeza cuál ocurrirá”."); },
+      tentBooks: () => showDialogue("Libros y manuscritos", " “A lo sumo”, “al menos” y “espacio muestral Ω”, son palabras subrayadas. Cada palabra cambia qué resultados pertenecen a un suceso."),
+  
+      // NUEVA ACCIÓN PARA LA NETBOOK (TUTORIALES)
+      openTutorials: () => {
+        openModal(`
+          <div class="modal-header">
+            <div>              
+              <h2>Tutoriales y ayudas</h2>
+            </div>
+            <button class="close-modal" type="button" data-close-modal aria-label="Cerrar">×</button>
+          </div>
+          <div class="modal-body">
+            <p class="modal-intro">Si deseas puedes ver de antemano los temas abordados dentro del juego:</p>
+            <p style="margin-top: 20px;">
+              <a href="https://www.youtube.com/watch?v=UN9AgGbGlX8" target="_blank" rel="noopener noreferrer" style="color: var(--bronze-bright); font-weight: bold; text-decoration: underline;">
+                Regla Laplace ↗
+              </a>
+              <br>
+              <a href="https://www.youtube.com/watch?v=7Fz8yu1Lhj8" target="_blank" rel="noopener noreferrer" style="color: var(--bronze-bright); font-weight: bold; text-decoration: underline;">
+                Probabilidad al lanzar 2 dados ↗
+              </a>
+              <br>
+              <a href="https://www.youtube.com/watch?v=OpnuzWQKq3s" target="_blank" rel="noopener noreferrer" style="color: var(--bronze-bright); font-weight: bold; text-decoration: underline;">
+                Diagrama de árbol ↗
+              </a>
+               <br>
+              <a href="https://www.youtube.com/watch?v=OpnuzWQKq3s" target="_blank" rel="noopener noreferrer" style="color: var(--bronze-bright); font-weight: bold; text-decoration: underline;">
+                Propiedades de la probabilidad ↗
+              </a>
+            </p>
+          </div>
+        `, "narrow");
+      },
+
+      /// PUZZLE 01 y 04
+      centralDoor1: () => {
+        if (state.currentScene === "central_2") {
+          // Sala 2: Puzzle 04
+          if (state.seals.dice) {
+            showToast("El Puzzle 04 ya ha sido completado.", "bad");
+          } else {
+            goTo("dice", "");
+          }
+        } else {
+          // Sala 1: Puzzle 01 (Laplace)
+          if (state.seals.laplace) {
+            showToast("El Puzzle 01 ya ha sido completado y su acceso está cerrado.", "bad");
+          } else {
+            goTo("laplace", "<i>Mmnm parece un altar.. Hay una inscripción que destaca la palabra CIELO.</i>");
+          }
+        }
+      },
+      
+      /// PUZZLE 02 y 05
+      centralDoor2: () => {
+        if (state.currentScene === "central_2") {
+          // Sala 2: Puzzle 05
+          if (!state.seals.dice) {
+            showToast("La puerta del Puzzle 05 está bloqueada. Debes completar el Puzzle 04 primero.", "bad");
+          } else if (state.seals.coin) {
+            showToast("El Puzzle 05 ya ha sido completado.", "bad");
+          } else {
+            goTo("coin", "");
+          }
+        } else {
+          // Sala 1: Puzzle 02 (DiceSum)
+          if (!state.seals.laplace) {
+            showToast("La segunda puerta necesita la llave del Puzzle 1.", "bad");
+          } else if (state.seals.diceSum) {
+            showToast("El Puzzle 02 ya ha sido completado", "bad");
+          } else {
+            goTo("diceSum", "Una pared con varios dados incrustados mostrando un patrón.");
+          }
+        }
+      },
+
+      /// PUZZLE 03 y 06
+      centralDoor3: () => {
+        if (state.currentScene === "central_2") {
+          // Sala 2: Puzzle 06
+          if (!state.seals.coin) {
+            showToast("La puerta del Puzzle 06 está bloqueada. Debes completar el Puzzle 05 primero.", "bad");
+          } else if (state.seals.subjective) {
+            showToast("El Puzzle 06 ya ha sido completado.", "bad");
+          } else {
+            goTo("subjective", "Hay indicios que de probablemente Arraiga estuvo por aquí");
+          }
+        } else {
+          // Sala 1: Puzzle 03 (Tree)
+          if (!state.seals.diceSum) {
+            showToast("La tercera puerta necesita la llave del Puzzle 2.", "bad");
+          } else if (state.seals.tree) {
+            showToast("El Puzzle 03 ya ha sido completado.", "bad");
+          } else {
+            goTo("tree", "La escritura en la pared parece importante, tomaré nota de ello.");
+          }
+        }
+      },
+      
+      laplacePuzzle: () => {
+        if (state.seals.laplace) {
+          showToast("El Puzzle 01 ya ha sido completado y su acceso está cerrado.", "bad");
+        } else {
+          openLaplacePuzzle();
+        }
+      },   
+
+      diceSumPuzzle: () => {
+        if (state.seals.diceSum) {
+          showToast("El Puzzle 02 ya ha sido completado y su acceso está cerrado.", "bad");
+        } else{
+          openDiceSumPuzzle();          
+        }       
+      },
+      treePuzzle: openTreePuzzle,      
+      goCentral: () => goTo(foundationalRouteSolved() ? "central_2" : "central"),
+      map: openMap,
+      centralDoorNext: () => {
+        if (!foundationalRouteSolved()) {
+          showToast(
+            `La puerta central exige las tres llaves iniciales. Tienes ${[
+              state.seals.laplace,
+              state.seals.diceSum,
+              state.seals.tree
+            ].filter(Boolean).length} de 3.`,
+            "bad"
+          );
+        } else {
+          goTo(
+            "central_2",
+            "Para avanzar se debe completar los puzzles de esta sala"
+          );
+        }
+      },
+
+      vault: () => {
+        showDialogue(
+          "Tú", 
+          "<i>¡He encontrado a León Arraiga! ¡Oiga! ¿se encuentra bien?</i>", 
+          () => {
+            showDialogue(
+              "León Arraiga", 
+              "<i>¡Gracias a Dios! ¿Cómo me has encontrado?</i>", 
+              () => {
+                showDialogue(
+                  "Tú", 
+                  "<i>No ha sido nada facil pero he leído sus pistas en el campamento y a lo largo de las Ruinas</i>", 
+                  () => {
+                    showDialogue(
+                      "León Arraiga", 
+                      "<i>Me alegro de que no te hayas quedado atrapado en alguna trampa</i>", 
+                      () => {
+                        showDialogue(
+                          "Tú", 
+                          "<i>Lo sacaré enseguida no se preocupe.</i>" );}
+                    ); }                );              }            );          }       
+        );
+  // Nos aseguramos de renderizar la escena de la cámara del horizonte por detrás
+  state.currentScene = "vault";
+  save();
+  renderScene();
+  },
+
+  vault2: () => {
+        showDialogue(
+          "León Arraiga", 
+          "<i>No sabes cuanto te agradezco joven</i>", 
+          () => {
+            showDialogue(
+              "León Arraiga", 
+              "<i>Creí que Tharun había construido un oráculo. Pero en realidad construyó una defensa <strong>contra la certeza falsa</strong>.No enseña qué va a ocurrir... enseña a pensar cuando no podemos saberlo.</i>", 
+              () => {                
+                    showDialogue(
+                      "León Arraiga", 
+                      "<i>¡Vamos! Salgamos de una vez de aquí</i>",
+                        () => {
+                          goTo("vault3");
+                         }
+                      ); }                );              }            );     
+  state.currentScene = "vault2";
+  save();
+  renderScene();
+  },
+
+      centralMechanism: () => {
+        if (!advancedCoreSolved()) {
+          showToast(
+            `El mecanismo exige completar los puzzles de la sala, tienes ${[
+              state.seals.dice,
+              state.seals.coin,
+              state.seals.subjective
+            ].filter(Boolean).length} de 3.`,
+            "bad"
+          );
+        } else if (!state.seals.axiom) {
+          goTo("axiom", "<i>Parece que detrás de la balanza hay una especie de puerta...</i>");
+        } else {
+          goTo("vault", "El medallón Ω está completo. Detrás del muro se escucha una voz humana.");
+        }
+      },
+      dicePuzzle: openDicePuzzle,
+      coinPuzzle: openCoinPuzzle,
+      subjectivePuzzle: openSubjectivePuzzle,
+      axiomPuzzle: openAxiomPuzzle,
+      finalpuzzle: openEnding,
+      
+      chestDice: () => openReward("dice"),
+      chestCoin: () => openReward("coin"),
+      chestSubjective: () => openReward("subjective"),
+      chestAxiom: () => openReward("axiom"),
+      
+      arriaga: () => showDialogue("León Arraiga", "<i>Debes activar la palanca que está ahí</i>"),
+      archive: () => showDialogue("Archivo mecánico", "Miles de discos registran experimentos repetidos: monedas, dados, urnas y rutas. El tesoro de Tharun es un archivo de decisiones, no una profecía."),
+      finalNote: () => showDialogue("Última nota", "“Si otra persona llega, habrá comprendido los siete mecanismos. Sólo entonces la palanca será segura.”"),
+      finalLever: () => { if (sealCount() === 7) openEnding(); else showToast("Faltan llaves en el receptáculo.", "bad"); },
+      
+      escape: () => {openCreditsModal();
+    },
+          
+    };
+    actions[action]?.();
+  };
+
+  const bindGlobalEvents = () => {
+    el("dialogueClose").addEventListener("click", hideDialogue);
+    el("revealButton").addEventListener("click", revealHotspots);
+    el("hintButton").addEventListener("click", useHint);
+    el("notebookButton").addEventListener("click", () => openNotebook());
+
+    el("soundButton").addEventListener("click", () => { 
+      state.settings.sound = !state.settings.sound; 
+      save(); 
+      updateHud(); 
+
+      const ambientAudio = document.getElementById("ambientAudio");
+      const ruinaAudio = document.getElementById("ruinaAudio");
+      const nivel06Audio = document.getElementById("nivel06Audio");
+      const finalAudio = document.getElementById("finalAudio");
+
+      if (state.settings.sound) {
+        beep(520, .06);
+        if (ambientAudio && (state.currentScene === "camp" || state.currentScene === "tent")) ambientAudio.play().catch(() => {});
+        if (ruinaAudio && ["central", "central_puertaA", "central_2", "central_2puerta"].includes(state.currentScene)) ruinaAudio.play().catch(() => {});
+        if (nivel06Audio && (state.currentScene === "subjective" || modalRoot.innerHTML.includes("belief-lab"))) nivel06Audio.play().catch(() => {});
+        if (finalAudio && (state.currentScene === "vault" || state.currentScene === "vault2" || state.currentScene === "vault3")) finalAudio.play().catch(() => {});
+         
+      } else {      
+
+        if (ambientAudio) fadeOutAudio (ambientAudio, 1000); 
+        if (ruinaAudio) fadeOutAudio (ruinaAudio, 1000); 
+        if (nivel06Audio) fadeOutAudio (nivel06Audio, 1000); 
+        if (finalAudio) fadeOutAudio (finalAudio, 1000); 
+      }
+    });
+
+    el("menuButton").addEventListener("click", openMenu);
+    el("backButton").addEventListener("click", () => {
+    // Si estás en la tienda, vuelves al campamento. 
+    // Si estás en un puzzle, vuelves a central_2 si ya completaste los 3 primeros, o a central si no.
+    if (state.currentScene === "tent") {
+        goTo("camp");
+        
+      } else {
+        goTo(foundationalRouteSolved() ? "central_2" : "central");
+      }
+    });
+    modalRoot.addEventListener("click", (event) => { if (event.target.matches("[data-close-modal]")) closeModal(); });
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") return;
+      if (modalRoot.innerHTML) closeModal(); else if (!dialogueEl.hidden) hideDialogue(); else openMenu();
+    });
+    let previousPortrait = isPortrait();
+    window.addEventListener("resize", () => {
+      const nowPortrait = isPortrait();
+      if (nowPortrait !== previousPortrait) { previousPortrait = nowPortrait; renderScene(); }
+    });
+  };
+
+  const boot = () => {
+    state.settings.reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    bindGlobalEvents();
+    
+    // --> CONFIGURACIÓN DEL BUCLE FLUIDO PARA EL AUDIO AQUÍ <--
+    const ambientAudio = document.getElementById("ambientAudio");
+    if (ambientAudio) {
+      ambientAudio.addEventListener("timeupdate", () => {
+        if (ambientAudio.duration && ambientAudio.currentTime >= ambientAudio.duration - 0.17) {
+          ambientAudio.currentTime = 0;
+          ambientAudio.play().catch(() => {});
+        }
+      });
+    }
+   
+    // --------------------------------------------------------
+
+    renderScene();
+    if (!storageAvailable) setTimeout(() => showToast("El guardado local no está disponible; la sesión seguirá funcionando.", "bad"), 900);
+    openIntro();
+  };
+
+  boot();
+})();
+
+</script>
+  </body>
+</html>
